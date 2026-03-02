@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DoxCalc</title>
+  <style>
+    :root {
+      --bg: #f4f7fb;
+      --panel: #ffffff;
+      --text: #1e2430;
+      --muted: #76839a;
+      --accent: #1677ff;
+      --accent-2: #0f5cc2;
+      --danger: #e24a4a;
+      --border: #dbe3f0;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      background: radial-gradient(circle at top right, #e6efff, var(--bg));
+      color: var(--text);
+    }
+
+    .calculator {
+      width: min(92vw, 360px);
+      border: 1px solid var(--border);
+      background: var(--panel);
+      border-radius: 14px;
+      box-shadow: 0 8px 26px rgba(18, 40, 82, 0.14);
+      padding: 16px;
+    }
+
+    .app-name {
+      margin: 0 0 10px 0;
+      font-size: 0.95rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+
+    .display {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #f8fbff;
+      text-align: right;
+      font-size: 2rem;
+      padding: 14px 12px;
+      margin-bottom: 12px;
+      color: var(--text);
+      overflow-x: auto;
+      white-space: nowrap;
+    }
+
+    .keys {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+
+    button {
+      appearance: none;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #fff;
+      color: var(--text);
+      font-size: 1.05rem;
+      padding: 12px 0;
+      cursor: pointer;
+      transition: transform 0.05s ease, background-color 0.16s ease;
+    }
+
+    button:active {
+      transform: translateY(1px);
+    }
+
+    .operator {
+      color: var(--accent-2);
+      font-weight: 600;
+    }
+
+    .equal {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+      font-weight: 600;
+    }
+
+    .equal:hover {
+      background: var(--accent-2);
+    }
+
+    .clear {
+      color: var(--danger);
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <main class="calculator" aria-label="DoxCalc calculator app">
+    <p class="app-name">DoxCalc</p>
+    <div id="display" class="display" aria-live="polite">0</div>
+    <div class="keys">
+      <button class="clear" data-action="clear">C</button>
+      <button data-action="delete">DEL</button>
+      <button class="operator" data-value="%">%</button>
+      <button class="operator" data-value="/">/</button>
+
+      <button class="operator" data-insert="sqrt(">sqrt</button>
+      <button class="operator" data-insert="cbrt(">cbrt</button>
+      <button class="operator" data-insert="ln(">ln</button>
+      <button class="operator" data-insert="root(">root</button>
+      <button class="operator" data-value="^">^</button>
+
+      <button data-value="7">7</button>
+      <button data-value="8">8</button>
+      <button data-value="9">9</button>
+      <button class="operator" data-value="*">*</button>
+
+      <button data-value="4">4</button>
+      <button data-value="5">5</button>
+      <button data-value="6">6</button>
+      <button class="operator" data-value="-">-</button>
+
+      <button data-value="1">1</button>
+      <button data-value="2">2</button>
+      <button data-value="3">3</button>
+      <button class="operator" data-value="+">+</button>
+
+      <button data-value="(">(</button>
+      <button data-value=")">)</button>
+      <button data-value=",">,</button>
+      <button data-value="0">0</button>
+      <button data-value=".">.</button>
+      <button class="equal" data-action="equals" style="grid-column: span 2;">=</button>
+    </div>
+  </main>
+
+  <script>
+    const display = document.getElementById("display");
+    const keys = document.querySelector(".keys");
+    let expression = "";
+
+    function updateDisplay(value) {
+      display.textContent = value || "0";
+    }
+
+    function isOperator(char) {
+      return ["+", "-", "*", "/", "%", "^"].includes(char);
+    }
+
+    function appendValue(value) {
+      const lastChar = expression.slice(-1);
+
+      if (value === "." && /(\d*\.\d*)$/.test(expression)) return;
+      if (isOperator(value) && (!expression || isOperator(lastChar))) return;
+
+      expression += value;
+      updateDisplay(expression);
+    }
+
+    function clearAll() {
+      expression = "";
+      updateDisplay("0");
+    }
+
+    function deleteLast() {
+      expression = expression.slice(0, -1);
+      updateDisplay(expression);
+    }
+
+    function calculate() {
+      if (!expression) return;
+
+      try {
+        const jsExpression = expression
+          .replaceAll("ln(", "Math.log(")
+          .replaceAll("sqrt(", "Math.sqrt(")
+          .replaceAll("cbrt(", "Math.cbrt(")
+          .replaceAll("root(", "__root(")
+          .replaceAll("^", "**");
+        const result = Function(
+          `"use strict"; const __root = (x, n) => Math.pow(x, 1 / n); return (${jsExpression})`
+        )();
+        expression = Number.isFinite(result) ? String(result) : "";
+        updateDisplay(expression || "Error");
+      } catch {
+        expression = "";
+        updateDisplay("Error");
+      }
+    }
+
+    keys.addEventListener("click", (event) => {
+      const target = event.target.closest("button");
+      if (!target) return;
+
+      const action = target.dataset.action;
+      const value = target.dataset.value;
+      const insert = target.dataset.insert;
+
+      if (action === "clear") return clearAll();
+      if (action === "delete") return deleteLast();
+      if (action === "equals") return calculate();
+      if (insert) return appendValue(insert);
+      if (value) appendValue(value);
+    });
+
+    document.addEventListener("keydown", (event) => {
+      const { key } = event;
+      const isNumber = /^[0-9]$/.test(key);
+      const isOperatorKey = ["+", "-", "*", "/", "%", "^"].includes(key);
+
+      if (isNumber || isOperatorKey || key === "." || key === "(" || key === ")" || key === ",") {
+        event.preventDefault();
+        appendValue(key);
+        return;
+      }
+
+      if (key === "Enter" || key === "=") {
+        event.preventDefault();
+        calculate();
+        return;
+      }
+
+      if (key === "Backspace") {
+        event.preventDefault();
+        deleteLast();
+        return;
+      }
+
+      if (key === "Escape") {
+        event.preventDefault();
+        clearAll();
+      }
+    });
+  </script>
+</body>
+</html>
