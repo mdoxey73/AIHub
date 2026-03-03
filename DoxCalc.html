@@ -120,6 +120,11 @@
       <button class="operator" data-insert="cbrt(">cbrt</button>
       <button class="operator" data-insert="ln(">ln</button>
       <button class="operator" data-insert="root(">root</button>
+
+      <button class="operator" data-insert="irr(" title="irr(cf₀, cf₁, …) — Internal Rate of Return">irr</button>
+      <button class="operator" data-insert="log10(">log10</button>
+      <button class="operator" data-insert="exp(">exp</button>
+      <button class="operator" data-insert="abs(">abs</button>
       <button class="operator" data-value="^">^</button>
 
       <button data-value="7">7</button>
@@ -185,13 +190,34 @@
       try {
         const jsExpression = expression
           .replaceAll("ln(", "Math.log(")
+          .replaceAll("log10(", "Math.log10(")
+          .replaceAll("exp(", "Math.exp(")
+          .replaceAll("abs(", "Math.abs(")
           .replaceAll("sqrt(", "Math.sqrt(")
           .replaceAll("cbrt(", "Math.cbrt(")
           .replaceAll("root(", "__root(")
+          .replaceAll("irr(", "__irr(")
           .replaceAll("^", "**");
-        const result = Function(
-          `"use strict"; const __root = (x, n) => Math.pow(x, 1 / n); return (${jsExpression})`
-        )();
+        const result = Function(`"use strict";
+          const __root = (x, n) => Math.pow(x, 1 / n);
+          const __irr = (...cf) => {
+            let r = 0.1;
+            for (let i = 0; i < 1000; i++) {
+              let npv = 0, d = 0;
+              for (let t = 0; t < cf.length; t++) {
+                const p = (1 + r) ** t;
+                npv += cf[t] / p;
+                d   -= t * cf[t] / ((1 + r) ** (t + 1));
+              }
+              if (Math.abs(d) < 1e-12) break;
+              const nr = r - npv / d;
+              if (Math.abs(nr - r) < 1e-8) return nr;
+              r = nr;
+            }
+            return r;
+          };
+          return (${jsExpression});
+        `)();
         expression = Number.isFinite(result) ? String(result) : "";
         updateDisplay(expression || "Error");
       } catch {
