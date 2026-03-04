@@ -1,3 +1,5 @@
+Paste the following into PowerShell to Run:
+python downloader.py --manual-login --channel chrome
 # Paper Downloader
 
 Automates browser-based paper PDF retrieval from a list of DOIs/URLs using your own authenticated session (institutional proxy, publisher login, etc.).
@@ -40,6 +42,12 @@ Copy-Item config.example.json config.json
 python downloader.py --manual-login --channel chrome
 ```
 
+Recommended command (copy/paste):
+
+```powershell
+python downloader.py --manual-login --manual-rescue --channel chrome --captcha-timeout 120
+```
+
 Common options:
 
 - `--input papers.txt`
@@ -51,6 +59,7 @@ Common options:
 - `--executable-path "C:\Path\To\browser.exe"`
 - `--delay 2.0`
 - `--captcha-timeout 600` (seconds; set `0` to wait forever)
+- `--manual-rescue` (lets you manually open PDF on challenge-heavy sites, then press Enter)
 
 ## Notes
 
@@ -58,3 +67,4 @@ Common options:
 - Some publisher pages use custom viewers/workflows; those entries may show `not_found` and need site-specific selectors.
 - If a CAPTCHA/security challenge appears, solve it in the browser; the script will auto-resume when cleared.
 - Reusing `browser-profile` preserves login state between runs.
+

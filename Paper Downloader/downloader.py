@@ -73,6 +73,14 @@ SITE_PATTERNS = {
     "jamanetwork.com": [
         ".pdf",
     ],
+    "science.org": [
+        "/doi/pdf/",
+        ".pdf",
+    ],
+    "aaas.org": [
+        "/doi/pdf/",
+        ".pdf",
+    ],
 }
 
 
@@ -106,7 +114,11 @@ def sanitize_filename(name: str, max_len: int = 150) -> str:
 
 
 def base_name_from_item(item: str, index: int) -> str:
-    normalized = item.replace("https://doi.org/", "").replace("http://doi.org/", "")
+    normalized = item.strip()
+    normalized = normalized.replace("https://", "").replace("http://", "")
+    normalized = normalized.replace("doi.org/", "")
+    if normalized.lower().endswith(".pdf"):
+        normalized = normalized[:-4]
     return f"{index:03d}_{sanitize_filename(normalized)}"
 
 
@@ -114,6 +126,8 @@ def choose_browser_launch(channel: str | None, executable_path: str | None) -> d
     launch_kwargs = {
         "headless": False,
         "accept_downloads": True,
+        # Reduce basic automation fingerprints on some publisher anti-bot pages.
+        "args": ["--disable-blink-features=AutomationControlled"],
     }
     if channel:
         launch_kwargs["channel"] = channel
@@ -187,6 +201,25 @@ def wait_for_captcha_resolution(page, timeout_seconds: int) -> bool:
         time.sleep(2)
 
 
+def manual_rescue_download(page, context, out_path: Path) -> bool:
+    print(
+        "\nManual rescue mode:\n"
+        "1) In the browser, finish verification/login.\n"
+        "2) Open the article PDF (or click the PDF download button).\n"
+        "3) Return to this terminal and press Enter.\n"
+    )
+    input()
+    current = (page.url or "").strip()
+    if current.lower().endswith(".pdf"):
+        if request_pdf(context, current, out_path):
+            return True
+    if try_site_specific_download(page, context, out_path):
+        return True
+    if try_click_download(page, out_path):
+        return True
+    return False
+
+
 def request_pdf(context, url: str, out_path: Path) -> bool:
     try:
         resp = context.request.get(url, timeout=30000)
@@ -199,6 +232,26 @@ def request_pdf(context, url: str, out_path: Path) -> bool:
         return False
     out_path.write_bytes(resp.body())
     return True
+
+
+def goto_with_retries(page, url: str, timeout_ms: int = 45000, retries: int = 3):
+    last_exc = None
+    for attempt in range(1, retries + 1):
+        try:
+            return page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
+        except Exception as exc:
+            last_exc = exc
+            message = str(exc).lower()
+            if "interrupted by another navigation" in message and attempt < retries:
+                try:
+                    page.wait_for_load_state("domcontentloaded", timeout=5000)
+                except Exception:
+                    pass
+                time.sleep(1.0)
+                continue
+            raise
+    if last_exc:
+        raise last_exc
 
 
 def try_click_download(page, out_path: Path) -> bool:
@@ -234,6 +287,16 @@ def parse_hostname(url: str) -> str:
         return (urlparse(url).hostname or "").lower()
     except Exception:
         return ""
+
+
+def extract_doi(text: str) -> str | None:
+    if not text:
+        return None
+    match = re.search(r"(10\.\d{4,9}/\S+)", text, flags=re.IGNORECASE)
+    if not match:
+        return None
+    doi = match.group(1).strip().rstrip(").,;")
+    return doi
 
 
 def site_patterns_for_url(url: str) -> list[str]:
@@ -287,6 +350,15 @@ def add_known_site_endpoints(page) -> list[str]:
         if m:
             doc_id = m.group(1)
             out.append(f"https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber={doc_id}")
+    if "science.org" in host:
+        # Common mapping: /doi/<doi> or /doi/full/<doi> -> /doi/pdf/<doi>
+        if "/doi/full/" in url:
+            out.append(url.replace("/doi/full/", "/doi/pdf/"))
+        if "/doi/abs/" in url:
+            out.append(url.replace("/doi/abs/", "/doi/pdf/"))
+        m = re.search(r"/doi/(?:full/|abs/)?(10\.\d{4,9}/\S+)$", url)
+        if m:
+            out.append(f"https://www.science.org/doi/pdf/{m.group(1)}")
     deduped: list[str] = []
     seen: set[str] = set()
     for candidate in out:
@@ -294,6 +366,17 @@ def add_known_site_endpoints(page) -> list[str]:
             seen.add(candidate)
             deduped.append(candidate)
     return deduped
+
+
+def try_doi_pdf_fallbacks(context, doi: str, out_path: Path) -> bool:
+    candidates = [
+        f"https://www.science.org/doi/pdf/{doi}",
+        f"https://www.science.org/doi/epdf/{doi}",
+    ]
+    for url in candidates:
+        if request_pdf(context, url, out_path):
+            return True
+    return False
 
 
 def try_site_specific_download(page, context, out_path: Path) -> bool:
@@ -357,13 +440,20 @@ def process_item(
     download_dir: Path,
     delay_seconds: float,
     captcha_timeout: int,
+    manual_rescue: bool,
 ) -> tuple[str, str]:
     source = normalize_item(item)
+    source_doi = extract_doi(source) or extract_doi(item)
     base_name = base_name_from_item(item, index)
     pdf_path = download_dir / f"{base_name}.pdf"
 
+    # Fast path for direct PDF URLs (e.g., arXiv).
+    if source.lower().endswith(".pdf"):
+        if request_pdf(context, source, pdf_path):
+            return ("downloaded", str(pdf_path))
+
     try:
-        page.goto(source, wait_until="domcontentloaded", timeout=45000)
+        goto_with_retries(page, source, timeout_ms=45000, retries=3)
     except PlaywrightTimeoutError:
         return ("error", f"Navigation timeout: {source}")
     except Exception as exc:
@@ -374,7 +464,14 @@ def process_item(
 
     if is_captcha_or_challenge(page):
         if not wait_for_captcha_resolution(page, captcha_timeout):
+            if manual_rescue and manual_rescue_download(page, context, pdf_path):
+                return ("downloaded", str(pdf_path))
             return ("captcha_timeout", f"Challenge not cleared in {captcha_timeout}s: {page.url}")
+
+    # If challenge keeps reappearing after initial clear, allow manual rescue immediately.
+    if is_captcha_or_challenge(page) and manual_rescue:
+        if manual_rescue_download(page, context, pdf_path):
+            return ("downloaded", str(pdf_path))
 
     if page.url.lower().endswith(".pdf"):
         try:
@@ -399,6 +496,10 @@ def process_item(
         if request_pdf(context, target_url, pdf_path):
             return ("downloaded", str(pdf_path))
 
+    # Final DOI-based resolver fallback (useful when anti-bot pages hide PDF anchors).
+    if source_doi and try_doi_pdf_fallbacks(context, source_doi, pdf_path):
+        return ("downloaded", str(pdf_path))
+
     return ("not_found", "No downloadable PDF detected.")
 
 
@@ -419,6 +520,11 @@ def main() -> int:
         type=int,
         default=600,
         help="Seconds to wait for manual CAPTCHA/challenge completion (0 = wait forever).",
+    )
+    parser.add_argument(
+        "--manual-rescue",
+        action="store_true",
+        help="If blocked by challenge loops, let you manually open PDF then press Enter to continue.",
     )
     args = parser.parse_args()
 
@@ -457,11 +563,23 @@ def main() -> int:
         browser_context = p.chromium.launch_persistent_context(**context_kwargs, **launch_kwargs)
         page = browser_context.new_page()
         if start_url:
-            page.goto(start_url, wait_until="domcontentloaded")
+            try:
+                goto_with_retries(page, start_url, timeout_ms=30000, retries=2)
+            except Exception as exc:
+                print(f"Warning: could not open start_url '{start_url}': {exc}")
+                print("Continuing with browser open for manual login.")
+                try:
+                    page.goto("about:blank")
+                except Exception:
+                    pass
 
         if args.manual_login:
             if login_url:
-                page.goto(login_url, wait_until="domcontentloaded")
+                try:
+                    goto_with_retries(page, login_url, timeout_ms=45000, retries=2)
+                except Exception as exc:
+                    print(f"Warning: could not open login_url '{login_url}': {exc}")
+                    print("Please navigate to your institutional login manually in the browser.")
             print(
                 "\nManual login step:\n"
                 "1) Complete institutional/proxy authentication in the opened browser.\n"
@@ -474,15 +592,23 @@ def main() -> int:
         for i, item in enumerate(items, start=1):
             normalized = normalize_item(item)
             print(f"[{i}/{len(items)}] {item}")
-            status, details = process_item(
-                page,
-                browser_context,
-                item,
-                i,
-                download_dir,
-                args.delay,
-                args.captcha_timeout,
-            )
+            work_page = browser_context.new_page()
+            try:
+                status, details = process_item(
+                    work_page,
+                    browser_context,
+                    item,
+                    i,
+                    download_dir,
+                    args.delay,
+                    args.captcha_timeout,
+                    args.manual_rescue,
+                )
+            finally:
+                try:
+                    work_page.close()
+                except Exception:
+                    pass
             print(f"  -> {status}: {details}")
             rows.append([str(i), item, normalized, status, details])
 
