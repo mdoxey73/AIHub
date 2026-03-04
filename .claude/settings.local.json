@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"import ast, sys; ast.parse\\(open\\(''downloader.py''\\).read\\(\\)\\); print\\(''Syntax OK''\\)\")",
+      "WebFetch(domain:aaahq.org)",
+      "WebFetch(domain:publications.aaahq.org)",
+      "WebFetch(domain:doi.org)",
+      "Bash(python -c \"import ast; ast.parse\\(open\\(''downloader.py''\\).read\\(\\)\\); print\\(''Syntax OK''\\)\")"
+    ]
+  }
+}

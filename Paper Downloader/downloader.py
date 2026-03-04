@@ -59,6 +59,11 @@ SITE_PATTERNS = {
         "/doi/pdf",
         "/doi/epdf",
     ],
+    # American Accounting Association (Atypon platform — same patterns as Wiley)
+    "aaahq.org": [
+        "/doi/pdf",
+        "/doi/epdf",
+    ],
     "ieeexplore.ieee.org": [
         "/stamp/stamp.jsp?tp=&arnumber=",
         "/document/",
@@ -79,6 +84,61 @@ SITE_PATTERNS = {
     ],
     "aaas.org": [
         "/doi/pdf/",
+        ".pdf",
+    ],
+    # PubMed Central
+    "ncbi.nlm.nih.gov": [
+        "/pmc/articles/",
+        "/pdf/",
+    ],
+    # PLOS journals
+    "journals.plos.org": [
+        "?type=printable",
+        "/pdf/",
+    ],
+    # ACS Publications
+    "pubs.acs.org": [
+        "/doi/pdf/",
+        "/doi/epdf/",
+    ],
+    # Oxford Academic
+    "academic.oup.com": [
+        "/pdf",
+    ],
+    # Cambridge Core
+    "cambridge.org": [
+        "/pdf",
+        "/core/services/aop-cambridge-core/content/view/",
+    ],
+    # MDPI open access
+    "mdpi.com": [
+        "/pdf",
+    ],
+    # BioMed Central
+    "biomedcentral.com": [
+        ".pdf",
+    ],
+    # JSTOR
+    "jstor.org": [
+        "/stable/pdf/",
+    ],
+    # Frontiers in ...
+    "frontiersin.org": [
+        "/pdf",
+    ],
+    # PNAS
+    "pnas.org": [
+        "/doi/pdf/",
+        ".full.pdf",
+    ],
+    # eLife
+    "elifesciences.org": [
+        ".pdf",
+        "/download",
+    ],
+    # Cell Press
+    "cell.com": [
+        "/pdf/",
         ".pdf",
     ],
 }
@@ -177,12 +237,16 @@ def is_captcha_or_challenge(page) -> bool:
         title = (page.title() or "").lower()
     except Exception:
         title = ""
+    # Fast path: check URL and title without any timeout.
+    fast_hay = f"{url}\n{title}"
+    if any(pattern in fast_hay for pattern in CAPTCHA_PATTERNS):
+        return True
+    # Slower fallback: inspect body text only if fast check was inconclusive.
     try:
         body = (page.locator("body").inner_text(timeout=2500) or "").lower()
     except Exception:
         body = ""
-    hay = f"{url}\n{title}\n{body}"
-    return any(pattern in hay for pattern in CAPTCHA_PATTERNS)
+    return any(pattern in body for pattern in CAPTCHA_PATTERNS)
 
 
 def wait_for_captcha_resolution(page, timeout_seconds: int) -> bool:
@@ -254,7 +318,9 @@ def goto_with_retries(page, url: str, timeout_ms: int = 45000, retries: int = 3)
         raise last_exc
 
 
-def try_click_download(page, out_path: Path) -> bool:
+def try_click_download(
+    page, out_path: Path, element_timeout: int = 1500, download_timeout: int = 8000
+) -> bool:
     selectors = [
         'a[href$=".pdf"]',
         'a[href*=".pdf?"]',
@@ -270,9 +336,9 @@ def try_click_download(page, out_path: Path) -> bool:
         for i in range(count):
             try:
                 elem = locator.nth(i)
-                if not elem.is_visible(timeout=1500):
+                if not elem.is_visible(timeout=element_timeout):
                     continue
-                with page.expect_download(timeout=8000) as dl_info:
+                with page.expect_download(timeout=download_timeout) as dl_info:
                     elem.click(timeout=3000)
                 download = dl_info.value
                 download.save_as(str(out_path))
@@ -292,10 +358,10 @@ def parse_hostname(url: str) -> str:
 def extract_doi(text: str) -> str | None:
     if not text:
         return None
-    match = re.search(r"(10\.\d{4,9}/\S+)", text, flags=re.IGNORECASE)
+    match = re.search(r"(10\.\d{4,9}/[^\s,;)\]>]+)", text, flags=re.IGNORECASE)
     if not match:
         return None
-    doi = match.group(1).strip().rstrip(").,;")
+    doi = match.group(1).strip().rstrip(".,;)]>")
     return doi
 
 
@@ -327,7 +393,16 @@ def add_known_site_endpoints(page) -> list[str]:
     url = page.url
     host = parse_hostname(url)
     out: list[str] = []
-    if "onlinelibrary.wiley.com" in host:
+    if "wiley.com" in host:
+        out.extend(
+            [
+                url.replace("/doi/full/", "/doi/pdf/"),
+                url.replace("/doi/abs/", "/doi/pdf/"),
+                url.replace("/doi/full/", "/doi/epdf/"),
+                url.replace("/doi/abs/", "/doi/epdf/"),
+            ]
+        )
+    if "aaahq.org" in host:
         out.extend(
             [
                 url.replace("/doi/full/", "/doi/pdf/"),
@@ -359,6 +434,55 @@ def add_known_site_endpoints(page) -> list[str]:
         m = re.search(r"/doi/(?:full/|abs/)?(10\.\d{4,9}/\S+)$", url)
         if m:
             out.append(f"https://www.science.org/doi/pdf/{m.group(1)}")
+    if "pubs.acs.org" in host:
+        out.extend(
+            [
+                url.replace("/doi/abs/", "/doi/pdf/"),
+                url.replace("/doi/full/", "/doi/pdf/"),
+                url.replace("/doi/epdf/", "/doi/pdf/"),
+            ]
+        )
+    if "academic.oup.com" in host:
+        # Oxford Academic: article pages end in numeric ID; pdf URL appends /pdf
+        if not url.rstrip("/").endswith("/pdf"):
+            out.append(url.rstrip("/") + "/pdf")
+    if "cambridge.org" in host and "/core/product/" in url:
+        out.append(url + "/pdf")
+    if "ncbi.nlm.nih.gov" in host:
+        # PMC: /pmc/articles/PMC123456/ -> /pmc/articles/PMC123456/pdf/
+        m = re.search(r"(/pmc/articles/PMC\d+)", url)
+        if m:
+            out.append(f"https://www.ncbi.nlm.nih.gov{m.group(1)}/pdf/")
+    if "journals.plos.org" in host:
+        base = url.split("?")[0]
+        out.append(f"{base}?type=printable")
+    if "mdpi.com" in host:
+        # MDPI: /htm -> /pdf, or just append /pdf to article path
+        if url.endswith("/htm"):
+            out.append(url[:-4] + "/pdf")
+        elif not url.endswith("/pdf"):
+            out.append(url.rstrip("/") + "/pdf")
+    if "frontiersin.org" in host:
+        out.extend(
+            [
+                url.replace("/full", "/pdf"),
+                url.replace("/abstract", "/pdf"),
+            ]
+        )
+    if "pnas.org" in host:
+        out.extend(
+            [
+                url.replace("/doi/abs/", "/doi/pdf/"),
+                url.replace("/doi/full/", "/doi/pdf/"),
+            ]
+        )
+    if "cell.com" in host:
+        out.extend(
+            [
+                url.replace("/fulltext/", "/pdf/"),
+                url.replace("/abstract/", "/pdf/"),
+            ]
+        )
     deduped: list[str] = []
     seen: set[str] = set()
     for candidate in out:
@@ -379,7 +503,27 @@ def try_doi_pdf_fallbacks(context, doi: str, out_path: Path) -> bool:
     return False
 
 
-def try_site_specific_download(page, context, out_path: Path) -> bool:
+def try_citation_meta_pdf(page, context, out_path: Path) -> bool:
+    """Try the citation_pdf_url <meta> tag — a widely supported schema embedded
+    by Springer, MDPI, Frontiers, BMC, eLife, and many others."""
+    try:
+        pdf_url = page.evaluate(
+            """() => {
+                const m = document.querySelector('meta[name="citation_pdf_url"]');
+                return m ? m.getAttribute('content') : null;
+            }"""
+        )
+    except Exception:
+        return False
+    if not pdf_url:
+        return False
+    target = urljoin(page.url, pdf_url)
+    return request_pdf(context, target, out_path)
+
+
+def try_site_specific_download(
+    page, context, out_path: Path, element_timeout: int = 1500, download_timeout: int = 8000
+) -> bool:
     # Publisher-tailored selectors first.
     selectors = [
         'a[data-track-action*="Pdf"]',
@@ -389,6 +533,14 @@ def try_site_specific_download(page, context, out_path: Path) -> bool:
         'a:has-text("Full Text PDF")',
         'button:has-text("Download PDF")',
         'button:has-text("View PDF")',
+        # Oxford Academic
+        "a.article-pdfLink",
+        # Cambridge Core
+        "a[title='PDF']",
+        # MDPI / Frontiers
+        "a.btn-pdf",
+        # PLOS
+        "a[href*='?type=printable']",
     ]
     for selector in selectors:
         locator = page.locator(selector)
@@ -396,9 +548,9 @@ def try_site_specific_download(page, context, out_path: Path) -> bool:
         for i in range(count):
             try:
                 elem = locator.nth(i)
-                if not elem.is_visible(timeout=1500):
+                if not elem.is_visible(timeout=element_timeout):
                     continue
-                with page.expect_download(timeout=8000) as dl_info:
+                with page.expect_download(timeout=download_timeout) as dl_info:
                     elem.click(timeout=3000)
                 dl_info.value.save_as(str(out_path))
                 return True
@@ -441,6 +593,11 @@ def process_item(
     delay_seconds: float,
     captcha_timeout: int,
     manual_rescue: bool,
+    nav_timeout: int = 45000,
+    element_timeout: int = 1500,
+    download_timeout: int = 8000,
+    inter_delay: float = 0.0,
+    domain_last_time: dict | None = None,
 ) -> tuple[str, str]:
     source = normalize_item(item)
     source_doi = extract_doi(source) or extract_doi(item)
@@ -453,12 +610,26 @@ def process_item(
         if request_pdf(context, source, pdf_path):
             return ("downloaded", str(pdf_path))
 
+    # Inter-domain rate limiting: enforce minimum gap between requests to the same domain.
+    if inter_delay > 0 and domain_last_time is not None:
+        domain = parse_hostname(source)
+        if domain:
+            elapsed = time.time() - domain_last_time.get(domain, 0)
+            if elapsed < inter_delay:
+                time.sleep(inter_delay - elapsed)
+
     try:
-        goto_with_retries(page, source, timeout_ms=45000, retries=3)
+        goto_with_retries(page, source, timeout_ms=nav_timeout, retries=3)
     except PlaywrightTimeoutError:
         return ("error", f"Navigation timeout: {source}")
     except Exception as exc:
         return ("error", f"Navigation failed: {source} ({exc})")
+
+    # Record visit time for rate limiting.
+    if inter_delay > 0 and domain_last_time is not None:
+        domain = parse_hostname(source)
+        if domain:
+            domain_last_time[domain] = time.time()
 
     if delay_seconds > 0:
         time.sleep(delay_seconds)
@@ -485,10 +656,14 @@ def process_item(
         except Exception:
             pass
 
-    if try_site_specific_download(page, context, pdf_path):
+    # citation_pdf_url meta tag: high-confidence universal fallback.
+    if try_citation_meta_pdf(page, context, pdf_path):
         return ("downloaded", str(pdf_path))
 
-    if try_click_download(page, pdf_path):
+    if try_site_specific_download(page, context, pdf_path, element_timeout, download_timeout):
+        return ("downloaded", str(pdf_path))
+
+    if try_click_download(page, pdf_path, element_timeout, download_timeout):
         return ("downloaded", str(pdf_path))
 
     candidates = extract_candidate_urls(page)
@@ -534,6 +709,30 @@ def main() -> int:
         "--manual-rescue",
         action="store_true",
         help="If blocked by challenge loops, let you manually open PDF then press Enter to continue.",
+    )
+    parser.add_argument(
+        "--nav-timeout",
+        type=int,
+        default=45000,
+        help="Milliseconds to wait for page navigation (default: 45000).",
+    )
+    parser.add_argument(
+        "--element-timeout",
+        type=int,
+        default=1500,
+        help="Milliseconds to wait for element visibility before clicking (default: 1500).",
+    )
+    parser.add_argument(
+        "--download-timeout",
+        type=int,
+        default=8000,
+        help="Milliseconds to wait for a download to start after clicking (default: 8000).",
+    )
+    parser.add_argument(
+        "--inter-delay",
+        type=float,
+        default=0.0,
+        help="Minimum seconds between requests to the same domain (default: 0, disabled).",
     )
     args = parser.parse_args()
 
@@ -583,21 +782,24 @@ def main() -> int:
                     pass
 
         if args.manual_login:
-            if login_url:
+            # login_url may be a single string or a list of URLs (for multi-provider auth).
+            login_urls = [login_url] if isinstance(login_url, str) else (login_url or [])
+            for lurl in login_urls:
                 try:
-                    goto_with_retries(page, login_url, timeout_ms=45000, retries=2)
+                    goto_with_retries(page, lurl, timeout_ms=45000, retries=2)
                 except Exception as exc:
-                    print(f"Warning: could not open login_url '{login_url}': {exc}")
-                    print("Please navigate to your institutional login manually in the browser.")
+                    print(f"Warning: could not open login URL '{lurl}': {exc}")
+                    print("Please complete this login step manually in the browser.")
             print(
                 "\nManual login step:\n"
-                "1) Complete institutional/proxy authentication in the opened browser.\n"
+                "1) Complete all required authentications in the opened browser.\n"
                 "2) Confirm you can open one article page successfully.\n"
                 "3) Return here and press Enter to continue.\n"
             )
             input()
 
         rows: list[list[str]] = [["index", "item", "normalized_url", "status", "details"]]
+        domain_last_time: dict[str, float] = {}
         for i, item in enumerate(items, start=1):
             normalized = normalize_item(item)
             print(f"[{i}/{len(items)}] {item}")
@@ -612,6 +814,11 @@ def main() -> int:
                     args.delay,
                     args.captcha_timeout,
                     args.manual_rescue,
+                    nav_timeout=args.nav_timeout,
+                    element_timeout=args.element_timeout,
+                    download_timeout=args.download_timeout,
+                    inter_delay=args.inter_delay,
+                    domain_last_time=domain_last_time,
                 )
             finally:
                 try:
