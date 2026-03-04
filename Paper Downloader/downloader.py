@@ -446,6 +446,7 @@ def process_item(
     source_doi = extract_doi(source) or extract_doi(item)
     base_name = base_name_from_item(item, index)
     pdf_path = download_dir / f"{base_name}.pdf"
+    challenge_seen = False
 
     # Fast path for direct PDF URLs (e.g., arXiv).
     if source.lower().endswith(".pdf"):
@@ -463,6 +464,7 @@ def process_item(
         time.sleep(delay_seconds)
 
     if is_captcha_or_challenge(page):
+        challenge_seen = True
         if not wait_for_captcha_resolution(page, captcha_timeout):
             if manual_rescue and manual_rescue_download(page, context, pdf_path):
                 return ("downloaded", str(pdf_path))
@@ -499,6 +501,13 @@ def process_item(
     # Final DOI-based resolver fallback (useful when anti-bot pages hide PDF anchors).
     if source_doi and try_doi_pdf_fallbacks(context, source_doi, pdf_path):
         return ("downloaded", str(pdf_path))
+
+    # If a challenge occurred and normal strategies still fail, allow one final
+    # operator-assisted attempt to open the PDF manually and continue.
+    if manual_rescue and challenge_seen:
+        if manual_rescue_download(page, context, pdf_path):
+            return ("downloaded", str(pdf_path))
+        return ("manual_not_found", "Manual rescue attempted, but PDF still not detected.")
 
     return ("not_found", "No downloadable PDF detected.")
 
