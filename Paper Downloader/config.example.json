@@ -1,0 +1,9 @@
+{
+  "login_url": "https://your-library-proxy-login.example.edu/login",
+  "start_url": "https://scholar.google.com",
+  "proxy": {
+    "server": "http://proxy.example.edu:8080",
+    "username": "your-username",
+    "password": "your-password"
+  }
+}
