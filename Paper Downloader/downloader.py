@@ -785,18 +785,18 @@ def main() -> int:
             # login_url may be a single string or a list of URLs (for multi-provider auth).
             login_urls = [login_url] if isinstance(login_url, str) else (login_url or [])
             for lurl in login_urls:
+                login_page = browser_context.new_page()
                 try:
-                    goto_with_retries(page, lurl, timeout_ms=45000, retries=2)
+                    goto_with_retries(login_page, lurl, timeout_ms=45000, retries=2)
                 except Exception as exc:
                     print(f"Warning: could not open login URL '{lurl}': {exc}")
                     print("Please complete this login step manually in the browser.")
-            print(
-                "\nManual login step:\n"
-                "1) Complete all required authentications in the opened browser.\n"
-                "2) Confirm you can open one article page successfully.\n"
-                "3) Return here and press Enter to continue.\n"
-            )
-            input()
+                print(
+                    f"\nLogin step: {lurl}\n"
+                    "1) Complete authentication in the browser tab.\n"
+                    "2) Return here and press Enter to continue to the next step.\n"
+                )
+                input()
 
         domain_last_time: dict[str, float] = {}
         with log_path.open("w", newline="", encoding="utf-8") as f:
