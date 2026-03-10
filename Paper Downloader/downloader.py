@@ -210,7 +210,7 @@ def base_name_from_item(item: str, index: int) -> str:
 
 
 def choose_browser_launch(channel: str | None, executable_path: str | None, mode: str = "auto") -> dict:
-    browser_args = ["--disable-blink-features=AutomationControlled"]
+    browser_args = ["--disable-blink-features=AutomationControlled", "--start-maximized"]
     if mode != "manual":
         # Disable extensions (e.g. Adobe Acrobat) that intercept PDF navigations in auto mode.
         browser_args.append("--disable-extensions")
@@ -917,14 +917,17 @@ def main() -> int:
     context_kwargs = {
         "user_data_dir": str(profile_dir),
         "downloads_path": str(download_dir),
-        "viewport": {"width": 1400, "height": 900},
+        "viewport": None,
     }
     if proxy:
         context_kwargs["proxy"] = proxy
 
     with sync_playwright() as p:
         browser_context = p.chromium.launch_persistent_context(**context_kwargs, **launch_kwargs)
-        page = browser_context.new_page()
+        # Reuse the tab the persistent context opened rather than creating a new blank one.
+        existing_pages = browser_context.pages
+        page = existing_pages[0] if existing_pages else browser_context.new_page()
+
         if start_url and not args.manual_login:
             try:
                 goto_with_retries(page, start_url, timeout_ms=30000, retries=2)
@@ -939,8 +942,9 @@ def main() -> int:
         if args.manual_login:
             # login_url may be a single string or a list of URLs (for multi-provider auth).
             login_urls = [login_url] if isinstance(login_url, str) else (login_url or [])
-            for lurl in login_urls:
-                login_page = browser_context.new_page()
+            for i, lurl in enumerate(login_urls):
+                # Reuse the existing page for the first login URL; open new tabs for the rest.
+                login_page = page if i == 0 else browser_context.new_page()
                 try:
                     goto_with_retries(login_page, lurl, timeout_ms=45000, retries=2)
                 except Exception as exc:
