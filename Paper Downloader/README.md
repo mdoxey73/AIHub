@@ -30,11 +30,10 @@ python -m playwright install chromium
 3. Create your inputs:
 
 ```powershell
-Copy-Item papers.example.txt papers.txt
 Copy-Item config.example.json config.json
 ```
 
-4. Edit `papers.txt` (DOIs/URLs, one per line) and `config.json` (if needed).
+4. Create `papers.txt` and add your DOIs/URLs, one per line (e.g. `10.1038/s41586-020-2649-2`). Optionally edit `config.json` if needed.
 
 ## Run
 
