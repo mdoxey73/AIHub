@@ -750,6 +750,11 @@ def process_item(
     if try_click_download(page, pdf_path, element_timeout, download_timeout):
         return ("downloaded", str(pdf_path))
 
+    # A click may have navigated the page to a PDF URL (rendered inline instead of
+    # triggering a download event). Try fetching whatever URL the page landed on.
+    if request_pdf(context, page.url, pdf_path):
+        return ("downloaded", str(pdf_path))
+
     candidates = extract_candidate_urls(page)
     candidates.sort(key=score_candidate, reverse=True)
     for href in candidates:
@@ -849,6 +854,7 @@ def main() -> int:
     context_kwargs = {
         "user_data_dir": str(profile_dir),
         "downloads_path": str(download_dir),
+        "viewport": {"width": 1400, "height": 900},
     }
     if proxy:
         context_kwargs["proxy"] = proxy
