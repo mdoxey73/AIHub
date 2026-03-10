@@ -22,7 +22,8 @@ PDF_KEYWORDS = (
 
 
 BLOCKED_PDF_URLS = (
-    "publications.aaahq.org/DocumentLibrary/AAA/Authorship.pdf",
+    # AAA policy/library PDFs linked on every article page — not the article itself
+    "publications.aaahq.org/DocumentLibrary/",
 )
 
 
@@ -68,6 +69,10 @@ SITE_PATTERNS = {
     "aaahq.org": [
         "/doi/pdf",
         "/doi/epdf",
+    ],
+    # AAA publications portal (Silverchair platform) — article PDFs live under /article-pdf/
+    "publications.aaahq.org": [
+        "/article-pdf/",
     ],
     # INFORMS (pubsonline.informs.org — Atypon platform, same as Wiley/AAA)
     "pubsonline.informs.org": [
