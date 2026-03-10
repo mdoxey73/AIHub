@@ -21,6 +21,11 @@ PDF_KEYWORDS = (
 )
 
 
+BLOCKED_PDF_URLS = (
+    "publications.aaahq.org/DocumentLibrary/AAA/Authorship.pdf",
+)
+
+
 CAPTCHA_PATTERNS = (
     "captcha",
     "verify you are human",
@@ -61,6 +66,11 @@ SITE_PATTERNS = {
     ],
     # American Accounting Association (Atypon platform — same patterns as Wiley)
     "aaahq.org": [
+        "/doi/pdf",
+        "/doi/epdf",
+    ],
+    # INFORMS (pubsonline.informs.org — Atypon platform, same as Wiley/AAA)
+    "pubsonline.informs.org": [
         "/doi/pdf",
         "/doi/epdf",
     ],
@@ -175,9 +185,14 @@ def sanitize_filename(name: str, max_len: int = 150) -> str:
 
 def is_valid_pdf(path: Path) -> bool:
     try:
-        return path.read_bytes(4) == b"%PDF"
+        return path.read_bytes()[:4] == b"%PDF"
     except Exception:
         return False
+
+
+def is_blocked_url(url: str) -> bool:
+    u = url.lower()
+    return any(blocked.lower() in u for blocked in BLOCKED_PDF_URLS)
 
 
 def base_name_from_item(item: str, index: int) -> str:
@@ -348,6 +363,9 @@ def try_click_download(
                 elem = locator.nth(i)
                 if not elem.is_visible(timeout=element_timeout):
                     continue
+                href = elem.get_attribute("href") or ""
+                if is_blocked_url(urljoin(page.url, href)):
+                    continue
                 with page.expect_download(timeout=download_timeout) as dl_info:
                     elem.click(timeout=3000)
                 download = dl_info.value
@@ -416,6 +434,15 @@ def add_known_site_endpoints(page) -> list[str]:
             ]
         )
     if "aaahq.org" in host:
+        out.extend(
+            [
+                url.replace("/doi/full/", "/doi/pdf/"),
+                url.replace("/doi/abs/", "/doi/pdf/"),
+                url.replace("/doi/full/", "/doi/epdf/"),
+                url.replace("/doi/abs/", "/doi/epdf/"),
+            ]
+        )
+    if "pubsonline.informs.org" in host:
         out.extend(
             [
                 url.replace("/doi/full/", "/doi/pdf/"),
@@ -505,6 +532,28 @@ def add_known_site_endpoints(page) -> list[str]:
     return deduped
 
 
+def dismiss_cookie_banners(page, timeout: int = 1500) -> None:
+    selectors = [
+        "#onetrust-accept-btn-handler",
+        "button:has-text('Accept All')",
+        "button:has-text('Accept all cookies')",
+        "button:has-text('Accept Cookies')",
+        "button:has-text('Accept all')",
+        "button:has-text('I Accept')",
+        "button:has-text('Agree')",
+        "button:has-text('Accept')",
+        "[aria-label*='Accept']",
+    ]
+    for sel in selectors:
+        try:
+            btn = page.locator(sel).first
+            if btn.is_visible(timeout=timeout):
+                btn.click(timeout=timeout)
+                return
+        except Exception:
+            continue
+
+
 def try_doi_pdf_fallbacks(context, doi: str, out_path: Path) -> bool:
     candidates = [
         f"https://www.science.org/doi/pdf/{doi}",
@@ -563,6 +612,9 @@ def try_site_specific_download(
                 elem = locator.nth(i)
                 if not elem.is_visible(timeout=element_timeout):
                     continue
+                href = elem.get_attribute("href") or ""
+                if is_blocked_url(urljoin(page.url, href)):
+                    continue
                 with page.expect_download(timeout=download_timeout) as dl_info:
                     elem.click(timeout=3000)
                 dl_info.value.save_as(str(out_path))
@@ -579,6 +631,8 @@ def try_site_specific_download(
         prioritized.sort(key=score_candidate, reverse=True)
         for href in prioritized:
             target_url = urljoin(page.url, href)
+            if is_blocked_url(target_url):
+                continue
             if request_pdf(context, target_url, out_path):
                 return True
     return False
@@ -647,6 +701,8 @@ def process_item(
     if delay_seconds > 0:
         time.sleep(delay_seconds)
 
+    dismiss_cookie_banners(page)
+
     if is_captcha_or_challenge(page):
         challenge_seen = True
         if not wait_for_captcha_resolution(page, captcha_timeout):
@@ -669,6 +725,13 @@ def process_item(
         except Exception:
             pass
 
+    # Detect inline PDFs rendered at known publisher PDF endpoints whose URLs
+    # don't end in .pdf (e.g. ScienceDirect /pdfft?...).
+    _PDF_ENDPOINT_HINTS = ("/pdfft", "/doi/pdf/", "/doi/epdf/", "/content/pdf/")
+    if any(hint in page.url.lower() for hint in _PDF_ENDPOINT_HINTS):
+        if request_pdf(context, page.url, pdf_path):
+            return ("downloaded", str(pdf_path))
+
     # citation_pdf_url meta tag: high-confidence universal fallback.
     if try_citation_meta_pdf(page, context, pdf_path):
         return ("downloaded", str(pdf_path))
@@ -683,6 +746,8 @@ def process_item(
     candidates.sort(key=score_candidate, reverse=True)
     for href in candidates:
         target_url = urljoin(page.url, href)
+        if is_blocked_url(target_url):
+            continue
         if request_pdf(context, target_url, pdf_path):
             return ("downloaded", str(pdf_path))
 
@@ -783,7 +848,7 @@ def main() -> int:
     with sync_playwright() as p:
         browser_context = p.chromium.launch_persistent_context(**context_kwargs, **launch_kwargs)
         page = browser_context.new_page()
-        if start_url:
+        if start_url and not args.manual_login:
             try:
                 goto_with_retries(page, start_url, timeout_ms=30000, retries=2)
             except Exception as exc:

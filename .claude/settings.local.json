@@ -6,7 +6,9 @@
       "WebFetch(domain:publications.aaahq.org)",
       "WebFetch(domain:doi.org)",
       "Bash(python -c \"import ast; ast.parse\\(open\\(''downloader.py''\\).read\\(\\)\\); print\\(''Syntax OK''\\)\")",
-      "Bash(python -m pip install --upgrade pip && pip install playwright && playwright install)"
+      "Bash(python -m pip install --upgrade pip && pip install playwright && playwright install)",
+      "Bash(python3 << 'EOF'\nfrom pathlib import Path\nimport inspect\n\n# Check the signature of read_bytes\\(\\)\nsig = inspect.signature\\(Path.read_bytes\\)\nprint\\(\"Path.read_bytes\\(\\) signature:\", sig\\)\n\n# Try to demonstrate the bug\nimport tempfile\nwith tempfile.NamedTemporaryFile\\(delete=False, suffix=\".pdf\"\\) as tmp:\n    tmp.write\\(b\"%PDF-1.4\\\\ntest content\"\\)\n    tmp_path = tmp.name\n\np = Path\\(tmp_path\\)\ntry:\n    result = p.read_bytes\\(4\\)\n    print\\(\"read_bytes\\(4\\) returned:\", result\\)\nexcept TypeError as e:\n    print\\(\"ERROR: read_bytes\\(4\\) raised TypeError:\", e\\)\n\n# Show what read_bytes\\(\\) actually does\nresult = p.read_bytes\\(\\)\nprint\\(\"read_bytes\\(\\) returned \\(first 20 bytes\\):\", result[:20]\\)\n\nPath\\(tmp_path\\).unlink\\(\\)\nEOF)",
+      "Bash(python3 -c \"from pathlib import Path; import inspect; print\\(inspect.signature\\(Path.read_bytes\\)\\)\")"
     ]
   }
 }
