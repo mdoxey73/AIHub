@@ -700,6 +700,24 @@ def score_candidate(url: str) -> int:
     return score
 
 
+def prompt_mode() -> str:
+    """Prompt the user to choose Auto or Manual mode. Returns 'auto' or 'manual'."""
+    while True:
+        choice = input("Mode — [A] Auto  [M] Manual: ").strip().upper()
+        if choice in ("A", "M"):
+            return "auto" if choice == "A" else "manual"
+        print("Please enter A or M.")
+
+
+def process_item_manual(page, item: str, nav_timeout: int = 45000) -> None:
+    """Navigate to the item URL and leave the tab open for manual download."""
+    url = normalize_item(item)
+    try:
+        goto_with_retries(page, url, timeout_ms=nav_timeout, retries=2)
+    except Exception as exc:
+        print(f"  Warning: could not navigate to {url}: {exc}")
+
+
 def process_item(
     page,
     context,
@@ -891,6 +909,8 @@ def main() -> int:
         print("No items found in input file.")
         return 1
 
+    mode = prompt_mode()
+
     launch_kwargs = choose_browser_launch(args.channel, args.executable_path)
     context_kwargs = {
         "user_data_dir": str(profile_dir),
@@ -932,38 +952,54 @@ def main() -> int:
                 input()
 
         domain_last_time: dict[str, float] = {}
-        with log_path.open("w", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            writer.writerow(["index", "item", "normalized_url", "status", "details"])
-            f.flush()
-            for i, item in enumerate(items, start=1):
-                normalized = normalize_item(item)
-                print(f"[{i}/{len(items)}] {item}")
-                work_page = browser_context.new_page()
-                try:
-                    status, details = process_item(
-                        work_page,
-                        browser_context,
-                        item,
-                        i,
-                        download_dir,
-                        args.delay,
-                        args.captcha_timeout,
-                        args.manual_rescue,
-                        nav_timeout=args.nav_timeout,
-                        element_timeout=args.element_timeout,
-                        download_timeout=args.download_timeout,
-                        inter_delay=args.inter_delay,
-                        domain_last_time=domain_last_time,
-                    )
-                finally:
-                    try:
-                        work_page.close()
-                    except Exception:
-                        pass
-                print(f"  -> {status}: {details}")
-                writer.writerow([str(i), item, normalized, status, details])
+
+        if mode == "manual":
+            with log_path.open("w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                writer.writerow(["index", "item", "normalized_url", "status", "details"])
                 f.flush()
+                for i, item in enumerate(items, start=1):
+                    normalized = normalize_item(item)
+                    print(f"[{i}/{len(items)}] {item}")
+                    work_page = browser_context.new_page()
+                    process_item_manual(work_page, item, nav_timeout=args.nav_timeout)
+                    # tabs are intentionally left open for the user to download manually
+                    writer.writerow([str(i), item, normalized, "manual_opened", normalized])
+                    f.flush()
+            input("\nAll tabs opened. Press Enter when you are done to close the browser.\n")
+        else:
+            with log_path.open("w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                writer.writerow(["index", "item", "normalized_url", "status", "details"])
+                f.flush()
+                for i, item in enumerate(items, start=1):
+                    normalized = normalize_item(item)
+                    print(f"[{i}/{len(items)}] {item}")
+                    work_page = browser_context.new_page()
+                    try:
+                        status, details = process_item(
+                            work_page,
+                            browser_context,
+                            item,
+                            i,
+                            download_dir,
+                            args.delay,
+                            args.captcha_timeout,
+                            args.manual_rescue,
+                            nav_timeout=args.nav_timeout,
+                            element_timeout=args.element_timeout,
+                            download_timeout=args.download_timeout,
+                            inter_delay=args.inter_delay,
+                            domain_last_time=domain_last_time,
+                        )
+                    finally:
+                        try:
+                            work_page.close()
+                        except Exception:
+                            pass
+                    print(f"  -> {status}: {details}")
+                    writer.writerow([str(i), item, normalized, status, details])
+                    f.flush()
 
         browser_context.close()
 
