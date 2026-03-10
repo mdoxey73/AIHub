@@ -173,6 +173,13 @@ def sanitize_filename(name: str, max_len: int = 150) -> str:
     return clean[:max_len]
 
 
+def is_valid_pdf(path: Path) -> bool:
+    try:
+        return path.read_bytes(4) == b"%PDF"
+    except Exception:
+        return False
+
+
 def base_name_from_item(item: str, index: int) -> str:
     normalized = item.strip()
     normalized = normalized.replace("https://", "").replace("http://", "")
@@ -295,6 +302,9 @@ def request_pdf(context, url: str, out_path: Path) -> bool:
     if "pdf" not in ctype and not url.lower().endswith(".pdf"):
         return False
     out_path.write_bytes(resp.body())
+    if not is_valid_pdf(out_path):
+        out_path.unlink(missing_ok=True)
+        return False
     return True
 
 
@@ -342,6 +352,9 @@ def try_click_download(
                     elem.click(timeout=3000)
                 download = dl_info.value
                 download.save_as(str(out_path))
+                if not is_valid_pdf(out_path):
+                    out_path.unlink(missing_ok=True)
+                    continue
                 return True
             except Exception:
                 continue
