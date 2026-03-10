@@ -928,6 +928,19 @@ def main() -> int:
         existing_pages = browser_context.pages
         page = existing_pages[0] if existing_pages else browser_context.new_page()
 
+        if mode == "manual":
+            # Playwright defaults accept_downloads=True, instructing Chrome via CDP to
+            # route all downloads (including PDFs opened in new tabs via link clicks)
+            # to Playwright's internal handler rather than Chrome's native renderer.
+            # This leaves PDF tabs spinning blank because Chrome never delivers the
+            # response to the tab's renderer. Restoring "default" gives control back
+            # to Chrome so PDFs display normally (inline viewer or download bar).
+            try:
+                cdp = browser_context.new_cdp_session(page)
+                cdp.send("Browser.setDownloadBehavior", {"behavior": "default"})
+            except Exception:
+                pass
+
         if start_url and not args.manual_login:
             try:
                 goto_with_retries(page, start_url, timeout_ms=30000, retries=2)
