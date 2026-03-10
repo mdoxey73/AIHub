@@ -214,7 +214,8 @@ def choose_browser_launch(channel: str | None, executable_path: str | None) -> d
         "headless": False,
         "accept_downloads": True,
         # Reduce basic automation fingerprints on some publisher anti-bot pages.
-        "args": ["--disable-blink-features=AutomationControlled"],
+        # Disable extensions (e.g. Adobe Acrobat) that intercept PDF navigations.
+        "args": ["--disable-blink-features=AutomationControlled", "--disable-extensions"],
     }
     if channel:
         launch_kwargs["channel"] = channel
@@ -319,7 +320,7 @@ def request_pdf(context, url: str, out_path: Path) -> bool:
     if not resp.ok:
         return False
     ctype = (resp.headers.get("content-type") or "").lower()
-    if "pdf" not in ctype and not url.lower().endswith(".pdf"):
+    if "pdf" not in ctype and not urlparse(url).path.lower().endswith(".pdf"):
         return False
     out_path.write_bytes(resp.body())
     if not is_valid_pdf(out_path):
@@ -545,9 +546,6 @@ def dismiss_cookie_banners(page, timeout: int = 1500) -> None:
         "button:has-text('Accept Cookies')",
         "button:has-text('Accept all')",
         "button:has-text('I Accept')",
-        "button:has-text('Agree')",
-        "button:has-text('Accept')",
-        "[aria-label*='Accept']",
     ]
     for sel in selectors:
         try:
@@ -591,6 +589,12 @@ def try_citation_meta_pdf(page, context, out_path: Path) -> bool:
 def try_site_specific_download(
     page, context, out_path: Path, element_timeout: int = 1500, download_timeout: int = 8000
 ) -> bool:
+    # Capture page state before any click that might navigate away.
+    article_url = page.url
+    candidates = extract_candidate_urls(page)
+    for endpoint in add_known_site_endpoints(page):
+        candidates.insert(0, endpoint)
+
     # Publisher-tailored selectors first.
     selectors = [
         'a[data-track-action*="Pdf"]',
@@ -618,24 +622,23 @@ def try_site_specific_download(
                 if not elem.is_visible(timeout=element_timeout):
                     continue
                 href = elem.get_attribute("href") or ""
-                if is_blocked_url(urljoin(page.url, href)):
+                if is_blocked_url(urljoin(article_url, href)):
                     continue
                 with page.expect_download(timeout=download_timeout) as dl_info:
                     elem.click(timeout=3000)
                 dl_info.value.save_as(str(out_path))
+                if not is_valid_pdf(out_path):
+                    out_path.unlink(missing_ok=True)
+                    continue
                 return True
             except Exception:
                 continue
 
-    candidates = extract_candidate_urls(page)
-    for endpoint in add_known_site_endpoints(page):
-        candidates.insert(0, endpoint)
-
-    prioritized = select_site_candidates(page.url, candidates)
+    prioritized = select_site_candidates(article_url, candidates)
     if prioritized:
         prioritized.sort(key=score_candidate, reverse=True)
         for href in prioritized:
-            target_url = urljoin(page.url, href)
+            target_url = urljoin(article_url, href)
             if is_blocked_url(target_url):
                 continue
             if request_pdf(context, target_url, out_path):
