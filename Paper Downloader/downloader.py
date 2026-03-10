@@ -798,39 +798,39 @@ def main() -> int:
             )
             input()
 
-        rows: list[list[str]] = [["index", "item", "normalized_url", "status", "details"]]
         domain_last_time: dict[str, float] = {}
-        for i, item in enumerate(items, start=1):
-            normalized = normalize_item(item)
-            print(f"[{i}/{len(items)}] {item}")
-            work_page = browser_context.new_page()
-            try:
-                status, details = process_item(
-                    work_page,
-                    browser_context,
-                    item,
-                    i,
-                    download_dir,
-                    args.delay,
-                    args.captcha_timeout,
-                    args.manual_rescue,
-                    nav_timeout=args.nav_timeout,
-                    element_timeout=args.element_timeout,
-                    download_timeout=args.download_timeout,
-                    inter_delay=args.inter_delay,
-                    domain_last_time=domain_last_time,
-                )
-            finally:
-                try:
-                    work_page.close()
-                except Exception:
-                    pass
-            print(f"  -> {status}: {details}")
-            rows.append([str(i), item, normalized, status, details])
-
         with log_path.open("w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
-            writer.writerows(rows)
+            writer.writerow(["index", "item", "normalized_url", "status", "details"])
+            f.flush()
+            for i, item in enumerate(items, start=1):
+                normalized = normalize_item(item)
+                print(f"[{i}/{len(items)}] {item}")
+                work_page = browser_context.new_page()
+                try:
+                    status, details = process_item(
+                        work_page,
+                        browser_context,
+                        item,
+                        i,
+                        download_dir,
+                        args.delay,
+                        args.captcha_timeout,
+                        args.manual_rescue,
+                        nav_timeout=args.nav_timeout,
+                        element_timeout=args.element_timeout,
+                        download_timeout=args.download_timeout,
+                        inter_delay=args.inter_delay,
+                        domain_last_time=domain_last_time,
+                    )
+                finally:
+                    try:
+                        work_page.close()
+                    except Exception:
+                        pass
+                print(f"  -> {status}: {details}")
+                writer.writerow([str(i), item, normalized, status, details])
+                f.flush()
 
         browser_context.close()
 
