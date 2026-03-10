@@ -349,6 +349,46 @@ def goto_with_retries(page, url: str, timeout_ms: int = 45000, retries: int = 3)
         raise last_exc
 
 
+def _click_and_get_pdf(page, elem, out_path: Path, download_timeout: int) -> bool:
+    """Click an element; handle both download-event and new-tab-opens-PDF cases."""
+    opened: list = []
+
+    def _on_page(p):
+        opened.append(p)
+
+    page.context.on("page", _on_page)
+    try:
+        with page.expect_download(timeout=download_timeout) as dl_info:
+            elem.click(timeout=3000)
+        dl_info.value.save_as(str(out_path))
+        if is_valid_pdf(out_path):
+            return True
+        out_path.unlink(missing_ok=True)
+    except Exception:
+        pass
+    finally:
+        try:
+            page.context.off("page", _on_page)
+        except Exception:
+            pass
+    # Download event didn't fire; check if click opened a new tab containing the PDF.
+    for np in opened:
+        np_url = ""
+        try:
+            np.wait_for_load_state("domcontentloaded", timeout=5000)
+            np_url = np.url
+        except Exception:
+            pass
+        try:
+            np.close()
+        except Exception:
+            pass
+        if np_url and not is_blocked_url(np_url):
+            if request_pdf(page.context, np_url, out_path):
+                return True
+    return False
+
+
 def try_click_download(
     page, out_path: Path, element_timeout: int = 1500, download_timeout: int = 8000
 ) -> bool:
@@ -372,14 +412,11 @@ def try_click_download(
                 href = elem.get_attribute("href") or ""
                 if is_blocked_url(urljoin(page.url, href)):
                     continue
-                with page.expect_download(timeout=download_timeout) as dl_info:
-                    elem.click(timeout=3000)
-                download = dl_info.value
-                download.save_as(str(out_path))
-                if not is_valid_pdf(out_path):
-                    out_path.unlink(missing_ok=True)
-                    continue
-                return True
+                # Fetch href directly first — avoids opening new tabs.
+                if href and request_pdf(page.context, urljoin(page.url, href), out_path):
+                    return True
+                if _click_and_get_pdf(page, elem, out_path, download_timeout):
+                    return True
             except Exception:
                 continue
     return False
@@ -624,13 +661,11 @@ def try_site_specific_download(
                 href = elem.get_attribute("href") or ""
                 if is_blocked_url(urljoin(article_url, href)):
                     continue
-                with page.expect_download(timeout=download_timeout) as dl_info:
-                    elem.click(timeout=3000)
-                dl_info.value.save_as(str(out_path))
-                if not is_valid_pdf(out_path):
-                    out_path.unlink(missing_ok=True)
-                    continue
-                return True
+                # Fetch href directly first — avoids opening new tabs.
+                if href and request_pdf(context, urljoin(article_url, href), out_path):
+                    return True
+                if _click_and_get_pdf(page, elem, out_path, download_timeout):
+                    return True
             except Exception:
                 continue
 
