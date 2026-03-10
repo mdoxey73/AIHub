@@ -583,6 +583,11 @@ def dismiss_cookie_banners(page, timeout: int = 1500) -> None:
         "button:has-text('Accept Cookies')",
         "button:has-text('Accept all')",
         "button:has-text('I Accept')",
+        # "Users also downloaded" promotional pop-up (AAA / Atypon)
+        "button:has-text(\"Don't Show This Again\")",
+        "button:has-text(\"Don't Show Again\")",
+        "a:has-text(\"Don't Show This Again\")",
+        "a:has-text(\"Don't Show Again\")",
     ]
     for sel in selectors:
         try:
@@ -626,6 +631,7 @@ def try_citation_meta_pdf(page, context, out_path: Path) -> bool:
 def try_site_specific_download(
     page, context, out_path: Path, element_timeout: int = 1500, download_timeout: int = 8000
 ) -> bool:
+    dismiss_cookie_banners(page)  # catch late-appearing overlays (e.g. "Users also downloaded")
     # Capture page state before any click that might navigate away.
     article_url = page.url
     candidates = extract_candidate_urls(page)
