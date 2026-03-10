@@ -209,13 +209,15 @@ def base_name_from_item(item: str, index: int) -> str:
     return f"{index:03d}_{sanitize_filename(normalized)}"
 
 
-def choose_browser_launch(channel: str | None, executable_path: str | None) -> dict:
+def choose_browser_launch(channel: str | None, executable_path: str | None, mode: str = "auto") -> dict:
+    browser_args = ["--disable-blink-features=AutomationControlled"]
+    if mode != "manual":
+        # Disable extensions (e.g. Adobe Acrobat) that intercept PDF navigations in auto mode.
+        browser_args.append("--disable-extensions")
     launch_kwargs = {
         "headless": False,
         "accept_downloads": True,
-        # Reduce basic automation fingerprints on some publisher anti-bot pages.
-        # Disable extensions (e.g. Adobe Acrobat) that intercept PDF navigations.
-        "args": ["--disable-blink-features=AutomationControlled", "--disable-extensions"],
+        "args": browser_args,
     }
     if channel:
         launch_kwargs["channel"] = channel
@@ -911,7 +913,7 @@ def main() -> int:
 
     mode = prompt_mode()
 
-    launch_kwargs = choose_browser_launch(args.channel, args.executable_path)
+    launch_kwargs = choose_browser_launch(args.channel, args.executable_path, mode=mode)
     context_kwargs = {
         "user_data_dir": str(profile_dir),
         "downloads_path": str(download_dir),
@@ -1001,7 +1003,10 @@ def main() -> int:
                     writer.writerow([str(i), item, normalized, status, details])
                     f.flush()
 
-        browser_context.close()
+        try:
+            browser_context.close()
+        except Exception:
+            pass
 
     print(f"\nDone. Results log: {log_path}")
     return 0
