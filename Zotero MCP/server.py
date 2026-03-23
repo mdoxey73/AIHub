@@ -31,14 +31,7 @@ from zotero_client import (
 logging.basicConfig(stream=sys.stderr, level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
 
-mcp = FastMCP(
-    "zotero",
-    description=(
-        "Access and manage your Zotero reference library. "
-        "Supports search, item details, BibTeX export, cite keys (via Better BibTeX), "
-        "collections, tags, attachments, notes, and adding/updating items."
-    ),
-)
+mcp = FastMCP("zotero")
 
 
 # ---------------------------------------------------------------------------
