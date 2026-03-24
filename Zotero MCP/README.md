@@ -91,7 +91,7 @@ Add the following to your Claude Desktop config file.
     "zotero": {
       "command": "python",
       "args": [
-        "C:\\Users\\mmdox\\OneDrive - The University of Alabama\\AIHub\\Repositories\\Zotero MCP\\server.py"
+        "C:\\path\\to\\Zotero MCP\\server.py"
       ]
     }
   }
