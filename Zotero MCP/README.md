@@ -119,14 +119,5 @@ Zotero MCP/
 ├── zotero_client.py    # pyzotero wrapper + formatting helpers
 ├── config.py           # Configuration (dotenv)
 ├── requirements.txt    # Python dependencies
-├── .env.example        # Config template (copy to .env)
-├── Paper Downloader/   # Separate tool for batch PDF retrieval
-└── DoxCalc.html        # Standalone financial calculator
+└── .env.example        # Config template (copy to .env)
 ```
-
----
-
-### Other Tools in This Repository
-
-- **[Paper Downloader](Paper%20Downloader/README.md)** — Batch PDF retrieval for academic papers via DOI/URL list
-- **DoxCalc** — Browser-based financial/math calculator with IRR support
