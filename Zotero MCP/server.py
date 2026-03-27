@@ -499,6 +499,66 @@ def add_tags(item_key: str, tags: str) -> str:
     return "\n".join(lines)
 
 
+@mcp.tool()
+def add_pdf_attachment(
+    file_path: str,
+    parent_item_key: str = "",
+    title: str = "",
+) -> str:
+    """Upload a local PDF file to the Zotero library as an attachment.
+
+    Uploads via the Zotero Web API — Zotero does not need to be running locally.
+    Requires Zotero file storage (cloud) or WebDAV to be configured, and the
+    API key must have write + file access permissions.
+
+    After upload, the file will appear in Zotero once it syncs.
+
+    Args:
+        file_path: Absolute local path to the PDF file (e.g. C:/Users/me/paper.pdf)
+        parent_item_key: Zotero key of the parent item to attach to (e.g. 'AB12CD34').
+                         If omitted, creates a standalone top-level attachment.
+        title: Display title for the attachment. Defaults to the filename.
+    """
+    from pathlib import Path
+
+    path = Path(file_path)
+    if not path.exists():
+        return f"Error: File not found: {file_path}"
+    if not path.is_file():
+        return f"Error: Path is not a file: {file_path}"
+    if path.suffix.lower() != ".pdf":
+        return f"Error: File does not appear to be a PDF (extension: {path.suffix})"
+
+    zot = get_zot()
+
+    if parent_item_key:
+        try:
+            zot.item(parent_item_key)
+        except Exception as e:
+            return f"Error: Could not find parent item '{parent_item_key}': {e}"
+
+    try:
+        result = zot.attachment_simple(
+            [str(path)],
+            parentid=parent_item_key if parent_item_key else None,
+        )
+    except Exception as e:
+        return f"Error uploading PDF: {e}"
+
+    if result.get("failed"):
+        return f"Upload failed: {result['failed']}"
+    if result.get("success"):
+        new_key = list(result["success"].values())[0]
+        location = f"child of {parent_item_key}" if parent_item_key else "top-level item"
+        return (
+            f"PDF uploaded successfully.\n"
+            f"Attachment key: {new_key}\n"
+            f"Location:       {location}\n"
+            f"File:           {path.name}"
+        )
+    return f"Unexpected response from Zotero API: {result}"
+
+
 # ===========================================================================
 # Entry point
 # ===========================================================================

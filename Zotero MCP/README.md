@@ -33,6 +33,7 @@ BBT availability is cached for 30 seconds, so there's no per-call penalty when Z
 | `add_item` | Add a new item to the library |
 | `update_item` | Update fields on an existing item |
 | `add_tags` | Add tags to an item |
+| `add_pdf_attachment` | Upload a local PDF as an attachment (standalone or child of an existing item) |
 
 ---
 
