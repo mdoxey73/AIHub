@@ -1,0 +1,49 @@
+name: ART preprint screener
+
+on:
+  schedule:
+    - cron: "17 13 * * *"  # daily, 8:17 a.m. Central (CDT)
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "trial = nothing sent to OSF; live = send rejections"
+        type: choice
+        options: [trial, live]
+        default: trial
+      max_per_run:
+        description: "Maximum submissions to screen"
+        default: "10"
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: art-screener
+  cancel-in-progress: false
+
+jobs:
+  screen:
+    # Scheduled runs do nothing until live mode is switched on with the OSF_LIVE variable.
+    if: github.event_name == 'workflow_dispatch' || vars.OSF_LIVE == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    defaults:
+      run:
+        working-directory: ART Preprint Screener
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - run: python screener.py
+        env:
+          SCREENER_MODE: ${{ github.event_name == 'schedule' && 'live' || inputs.mode }}
+          MAX_PER_RUN: ${{ inputs.max_per_run || vars.MAX_PER_RUN || '10' }}
+          OSF_TOKEN: ${{ secrets.OSF_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ART_AGENT_ID: ${{ vars.ART_AGENT_ID }}
+          ART_ENVIRONMENT_ID: ${{ vars.ART_ENVIRONMENT_ID }}
+          ART_WORKSPACE_ID: ${{ vars.ART_WORKSPACE_ID }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

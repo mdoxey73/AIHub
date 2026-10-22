@@ -1,0 +1,25 @@
+name: ART screener setup
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ART Preprint Screener
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - run: python setup_agent.py
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ART_AGENT_ID: ${{ vars.ART_AGENT_ID }}
+          ART_ENVIRONMENT_ID: ${{ vars.ART_ENVIRONMENT_ID }}
