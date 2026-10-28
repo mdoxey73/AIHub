@@ -105,7 +105,31 @@ All five open questions were answered by Dr. Doxey on 2026-10-28. The prompt in 
 
 Status: spec locked. Next action is stage 1 of the build order in the prompt.
 
-## 8. Sources
+## 8. Build log
+
+### 2026-10-28 — playable build (`game/`)
+
+Built in one pass to a playable state: all seven stages of the build order, verified headlessly in Chromium with Playwright (desktop 540×960 and iPhone-sized 390×844 with touch).
+
+**What is in the build.** Pseudo-3D scrolling highway with median, barriers, hazard stripes, LED posts and roadside props; drag-steered squad with a hex formation capped at 64 drawn soldiers and a true count label; automatic fire with aim assist; gates (`+`, `x`, `-`, `÷`), gate chains and shoot-to-upgrade with bullet-hole decals; walker, runner and brute zombies with HP bars, HP numbers, damage pops, splats and contact kills; numbered weapon barrels (pistol, rifle, shotgun, minigun, RPG, drone, armored vehicle) and explosive barrels with chain reactions; end-of-level boss with world- and screen-anchored skull HP bar, aggregated damage pops, burn state from rockets, contact drain, and the Giant variant with stomp shake and escort hordes; twelve levels (1–3 hand-laid, 4–12 from hand-tuned parameter rows through a seeded generator) plus scaled levels beyond; localStorage progress; title, win and lose screens; synthesized WebAudio; particles, floaters, shake, flash, hit-stop and weapon banners; debug overlay and keys.
+
+**Verified.** No page errors or console errors across a scripted level-1 playthrough (a simple steering AI picks the best gate lane), the win → next level flow, the lose → retry flow, save persistence, the Giant boss on level 5, and a stress scene (level 12, 999 soldiers, drone, 150 zombies, 400+ bullets). Headless frame time held 16.7 ms median under that stress; that is a software renderer on a server, not a phone, so a real-device profile is still owed.
+
+**Rebalanced during the build** (the prompt's §3 and §4 tables were starting points; shipped values are in `game/js/config.js` and `game/js/levels.js`):
+- Shoot-to-upgrade originally added +1 per 8 hits with no per-gate cap; with 64 miniguns a gate maxed out instantly and level 1 ended with a squad of 3,455. Now the first upgrade needs 10 hits, each further one doubles the requirement, and a gate upgrades at most five times (+5, or +1.0x in 0.2 steps).
+- Overflow fire from undrawn soldiers is capped at 64 extra effective shooters so damage stops growing past about N = 700.
+- Boss HP raised about 4× across the ladder (level 1: 12,000; level 5 Giant: 60,000; level 10 Giant: 110,000) to match the squad sizes the gate math actually produces. A good level-1 run ends with a squad near 250–300 and kills the boss in about 3 seconds after it appears.
+- Perspective constant raised from 6 to 14 so gates, barrels and the boss stay readable at 40–80 m, as in the ads; formation depth spacing widened to match.
+- Bullet pool raised to 600 and weapon ranges shortened so a 64-minigun volley does not exhaust the pool.
+- Taller phones (19.5:9) extend the logical playfield height up to 1200 instead of letterboxing.
+
+**Known gaps and follow-ups.**
+- Not yet profiled on a real phone. The sprite and glyph caches and pooling are in place; the first device test should check 150 zombies plus 400 bullets.
+- Levels 4–12 are generated from per-level parameter rows (zombie HP, pack and horde sizes, negative-gate count, crate list) rather than laid out segment by segment. The rows are hand-tuned; the layout is deterministic per level.
+- Boss floating numbers aggregate damage over 120 ms, so they read "-3000" rather than the ads' "-80". A per-hit cap on the popped value would bring the look closer at the cost of honesty.
+- The desert backdrop skin from the App Store creative is not implemented; one industrial skin only.
+
+## 9. Sources
 
 - [Z Route: Redemption on Google Play](https://play.google.com/store/apps/details?id=com.zroute.global&hl=en_US) — screenshots and reviews
 - [Z Route: Redemption on the App Store](https://apps.apple.com/us/app/z-route-redemption/id6762268182) — screenshots, developer name, reviews

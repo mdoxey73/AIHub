@@ -74,6 +74,8 @@ Weapons replace each other except Drone, which is additive. A weapon pickup show
 
 ## 4. Levels
 
+> Build note (2026-10-28): the shipped game rebalanced boss HP upward and gate upgrade pacing downward; see the build log in [[build-plan-2026-10-28]] and `game/js/levels.js` for live values.
+
 Twelve levels, data-driven. Each level is a **track**: a list of segments placed by road distance (meters) and lane (`L`, `R`, or `BOTH`). Level length 450–750 m at `SQUAD_SPEED` 7 m/s (about 65–105 s). Use this curve, then tune:
 
 | Level | Start N | Zombie HP (walker) | Pack size | Negative gates | Weapon crate | Boss HP | Notes |
