@@ -1,7 +1,7 @@
 ---
 title: Build Plan — Zombie Route Shooter (Z Route ad-style lane runner)
 date: 2026-10-28
-status: draft-v1
+status: locked-v1
 tags:
   - game-dev
   - plan
@@ -91,13 +91,19 @@ Each stage ends with "how to run" and a checklist. Run with `python -m http.serv
 6. **Levels.** Test: all 12 levels load from data; level 1 shows the hint hand; progress persists across reload; level 13+ generates; runners appear from level 7 and brutes from level 8; the HUD shows the level and weapon.
 7. **Polish and performance.** Test: Chrome performance profile on a throttled CPU (4× slowdown) stays above 50 fps at 150 zombies and 400 bullets; no allocations in the hot loop (check the memory timeline for sawtooth GC); mute toggle works; audio starts on first touch on iOS Safari.
 
-## 7. Open questions for Dr. Doxey
+## 7. Decisions (interview, 2026-10-28)
 
-1. **Cannon mode.** Drop the Mob Control cannon entirely (my recommendation), or add it later as a second mode? The engine supports it either way; it is a different ad.
-2. **Art fidelity.** The ads are photoreal 3D. The prompt specifies capsule-figure vector art for speed and zero assets. If you want something closer to the ads' look, the next step would be hand-drawn sprite sheets or a WebGL renderer, both of which break the "no assets, no build" constraint.
-3. **The "fake fail" beat.** Playable ads often script a deliberately bad choice so the viewer thinks "I could do better." Do you want an optional scripted demo mode that plays the wrong-door beat on the title screen, or should the game stay purely player-driven?
-4. **Reference capture.** Can you screen-record one Z Route playable ad and one video ad? With those I can tighten gate values, pacing, and the end-card flow in a second pass.
-5. **Scope of levels.** Twelve hand-tuned levels plus procedural scaling, or do you want a longer hand-tuned ladder?
+All five open questions were answered by Dr. Doxey on 2026-10-28. The prompt in [[build-prompt-2026-10-28]] already reflects every answer, so it is unchanged.
+
+| # | Question | Decision |
+|---|---|---|
+| 1 | Mob Control cannon mode | **Dropped entirely.** First build is purely the Z Route squad lane-runner. |
+| 2 | Art fidelity | **Code-drawn vector art.** Capsule figures, pattern-filled boss, pseudo-3D Canvas 2D road. No assets, no build step. |
+| 3 | Scripted "fake fail" beat | **None.** Purely player-driven; the only fails are the player's. |
+| 4 | Ad reference captures | **Not needed.** Store screenshots plus the genre's documented rules are the reference; tune by feel in the polish stage. |
+| 5 | Level ladder scope | **12 hand-tuned levels, Giant bosses on 5 and 10, procedural scaling beyond 12.** |
+
+Status: spec locked. Next action is stage 1 of the build order in the prompt.
 
 ## 8. Sources
 

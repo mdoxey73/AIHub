@@ -1,7 +1,7 @@
 ---
 title: Build Prompt — Zombie Route Shooter (Z Route ad-style lane runner)
 date: 2026-10-28
-status: draft-v1
+status: locked-v1
 tags:
   - game-dev
   - prompt
