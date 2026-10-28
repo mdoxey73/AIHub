@@ -8,7 +8,17 @@ A self-contained HTML5 game that plays the way the *Z Route: Redemption* ads pre
 - serve the folder: `python -m http.server 8000` and open `http://localhost:8000/`.
 - **On a phone**: serve the folder on your LAN, open the address in Safari or Chrome, and use "Add to Home Screen" for a full-screen launch.
 
-The playfield is a 9:16 portrait canvas letterboxed into whatever window it gets. Desktop Chrome with device emulation set to a phone is a fine test rig.
+The playfield is a 9:16 portrait canvas; taller phone screens extend it to fill the screen. Desktop Chrome with device emulation set to a phone is a fine test rig.
+
+## Install on a phone
+
+**As an app (works offline).** Serve the folder over HTTPS (GitHub Pages works) and open it on the phone. The service worker in `sw.js` caches every file on the first visit. Then:
+- iPhone: Safari, Share, "Add to Home Screen". The icon launches full screen and runs without a connection.
+- Android: Chrome offers "Install app" from the menu or a banner; otherwise "Add to Home screen".
+
+Service workers need HTTPS or `localhost`, so a plain `http://192.168.x.x:8000` LAN server gives you the home-screen icon but not offline play. When you change any game file, bump `VERSION` in `sw.js` so installed copies refresh.
+
+**As a single file.** `python build-single.py` writes `dist/zombie-route-shooter.html` with every script and the stylesheet inlined (about 100 KB, no icons, no service worker). Send that file to the phone any way you like. Android Chrome opens it from the Files app. iPhone is less reliable with local HTML files; use the home-screen install instead.
 
 ## Controls
 
@@ -43,6 +53,11 @@ js/levels.js          levels 1-3 hand-laid; 4-12 from hand-tuned parameter rows;
 js/save.js            localStorage
 js/input.js           pointer drag, taps, keyboard
 js/main.js            fixed-step loop, level flow, HUD, title / win / lose screens
+manifest.webmanifest  PWA manifest (name, icons, fullscreen portrait)
+sw.js                 service worker: offline cache of the whole game
+icons/                home-screen icons (generated, code-drawn)
+build-single.py       bundles everything into dist/zombie-route-shooter.html
+dist/                 the single-file build
 ```
 
 ## Tuning
