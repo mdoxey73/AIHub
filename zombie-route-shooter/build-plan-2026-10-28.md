@@ -129,6 +129,23 @@ Built in one pass to a playable state: all seven stages of the build order, veri
 - Boss floating numbers aggregate damage over 120 ms, so they read "-3000" rather than the ads' "-80". A per-hit cap on the popped value would bring the look closer at the cost of honesty.
 - The desert backdrop skin from the App Store creative is not implemented; one industrial skin only.
 
+### 2026-10-28 — second pass: Dr. Doxey's feedback (gates, barrels, difficulty, shadows, visuals)
+
+Feedback after playing the first build: gate increases felt capped; gates stacked right behind one another; wanted barrels with different guns and bonuses that must be broken; the game was far too easy and needed many more enemies; zombies hid behind gates that could not be shot through. Then, mid-pass: barrels and gates should cost enough fire that spending time on them instead of the boss is a real choice; gates should absorb bullets (classic), which is fine as long as zombies are never hidden by gates and gates are not stacked.
+
+**Changes.**
+- Gate pumping uncapped in practice: 12 hits for the first upgrade, +10 per further one, ceilings `+60` / `x4`. Chains spaced 12 m (`GATE_CHAIN_SPACING`), never stacked; multiply chains limited to two gates.
+- Gates absorb bullets again (`GATES_ABSORB_BULLETS: true`) so pumping costs fire. To keep that fair, a layout rule: no pack or horde 22–46 m behind a gate in its lane (`GATE_SHADOW`, derived from the 7 m/s squad and 2.3 m/s walker closing speeds and the 95 m spawn distance). `fixLayout()` in `levels.js` enforces it on every level (other lane first, else push the pack farther up the road); the runtime trickle spawner checks live gates the same way. A static check over levels 1–15 reports zero violations and zero stacked gates.
+- Barrels: three kinds. Weapon (pistol, rifle, shotgun, minigun, rpg, drone, vehicle), bonus (`+N` squad, `RATE+`, `DMG+`, each +20% to a 2x cap, reset per level), explosive. HP scales with level (x3 in generated levels). Every level ends with a boss-choice segment: a high-HP barrel in one lane and a pumpable gate in the other, met as the boss walks in.
+- Enemies: pack sizes roughly doubled, hordes 26–64 in rows of 10 across both lanes, late hordes mix runners and brutes, a steady trickle spawner, zombie HP up, speed up, contact kills x2 from level 5 and x3 from level 9, boss faster and draining `max(10, 15% of N)` per second. Max zombies on screen went from about 50 to 120–220; `MAX_ZOMBIES` raised to 320 and blood decals added.
+- Damage model: the 64 drawn soldiers supplied nearly all damage, so squad size barely mattered and an idle player could win. Now damage per bullet carries `min(N,64) + (N-64)^0.75` effective shooters, so a 9999 squad hits about 16x harder than a 64 squad. Boss HP retuned accordingly (level 1: 70,000; level 10 Giant: 1,400,000). `N` capped at 9999.
+- Visuals: 1 px dark outlines baked into unit sprites, blood decals that scroll with the road, debris and cracks, sun glow and clouds and lit windows in the backdrop, gate glow and highlight, vignette, level chip, bonus label chips, weapon name labels over weapon barrels.
+- Tooling: the Playwright scripts now live in `game/test/` with relative paths (`ai.js <level>` steering AI, `dumb.js` no-steer, `run.js` full flow, `phone.js`, `pwa.js`, `single.js`).
+
+**Calibration history (steering AI).** Before the pass: level 1 won with a squad of 290 and about 50 zombies on screen. After uncapping gates and before the damage-model change, idle runs won levels 1, 3 and 6. With the damage model and absorbing gates the AI lost everything until the first version of the layout fixer (which dropped packs at the start) was replaced and small squads were restored to full strength. Final state: steering AI wins all twelve levels (level 1 boss in about 11 s, level 10 Giant in about 20 s, 48 to 201 zombies on screen); no-steering runs lose levels 3 and 6 and win the tutorial level 1; static layout check reports 0 gate-shadow violations and 0 stacked gates across levels 1 to 15; single-file build and offline install verified.
+
+**Still open.** The AI is crude (ignores barrels unless close, does not weigh absorbing gates), so the "winnable" verdicts are a floor; a human tuning pass is the next step. Real-device profiling still not done. Boss pops read "-3000" rather than the ads' "-80".
+
 ## 9. Sources
 
 - [Z Route: Redemption on Google Play](https://play.google.com/store/apps/details?id=com.zroute.global&hl=en_US) — screenshots and reviews

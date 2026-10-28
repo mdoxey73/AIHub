@@ -1,6 +1,6 @@
 /* sw.js — service worker: caches the whole game on first visit so it runs
    offline once added to the home screen. Bump VERSION whenever a file changes. */
-const VERSION = 'zrs-v1';
+const VERSION = 'zrs-v2';
 const FILES = [
   './', './index.html', './manifest.webmanifest', './css/style.css',
   './js/config.js', './js/render/camera.js', './js/render/sprites.js', './js/render/road.js',

@@ -41,6 +41,8 @@
     Zb.reset(); Bu.reset(); Ga.reset(); Ba.reset(); Bo.reset(); F.reset();
     game.segIdx = 0; game.bossSpawned = false; game.state = 'playing'; game.time = 0; game.endT = 0;
     game.hintT = n === 1 ? 3.2 : 0;
+    game.trickleT = game.data.trickle ? game.data.trickle.every : 0;
+    Zb.contactMult = n >= 9 ? 3 : n >= 5 ? 2 : 1; // late zombies take more soldiers per contact
   }
   game.start = startLevel;
 
@@ -51,11 +53,25 @@
       case 'pair': Ga.spawn(s[1], 'L', s[2], s[3]); Ga.spawn(s[1], 'R', s[4], s[5]); break;
       case 'gate': Ga.spawn(s[1], s[2], s[3], s[4]); break;
       case 'pack': Zb.spawnPack(s[2], s[1], s[3], s[4], hp); break;
-      case 'horde': Zb.spawnHorde(s[1], s[2], hp, s[3]); break;
-      case 'barrel': Ba.spawn(s[1], s[2], s[3], s[4], s[5]); break;
+      case 'horde': Zb.spawnHorde(s[1], s[2], hp, s[3], game.level >= 5 ? { runner: 0.3, brute: 0.15 } : game.level >= 3 ? { runner: 0.25 } : null); break;
+      case 'barrel': Ba.spawn(s[1], s[2], s[3], s[4], s[5], s[6]); break;
     }
   }
 
+  // Pick a lane where a pack spawned at spawnZ would not be hidden behind an unpassed gate.
+  function trickleLane(spawnZ) {
+    let hidL = false, hidR = false;
+    const G = Ga.items, sh = C.GATE_SHADOW;
+    for (let i = 0; i < G.length; i++) {
+      const gt = G[i]; if (!gt.a || gt.passed) continue;
+      const d = spawnZ - gt.z;
+      if (d > sh[0] && d < sh[1]) { if (gt.lane !== 'R') hidL = true; if (gt.lane !== 'L') hidR = true; }
+    }
+    if (!hidL && !hidR) return Math.random() < 0.5 ? 'L' : 'R';
+    if (!hidL) return 'L';
+    if (!hidR) return 'R';
+    return null;
+  }
   function updatePlaying(dt) {
     game.time += dt;
     if (game.hintT > 0) game.hintT -= dt;
@@ -63,12 +79,28 @@
     Q.update(dt, dxLane, I.keyDir());
     const segs = game.data.segs;
     while (game.segIdx < segs.length && segs[game.segIdx][1] <= Q.z + C.SPAWN_AHEAD) { spawnSeg(segs[game.segIdx]); game.segIdx++; }
+    // steady trickle of small packs so the road is never empty
+    const tr = game.data.trickle;
+    if (tr && Q.z >= tr.from) {
+      game.trickleT -= dt;
+      if (game.trickleT <= 0) {
+        const sz = Q.z + C.SPAWN_AHEAD - 5;
+        const lane = trickleLane(sz);
+        if (!lane) game.trickleT = 0.8; // every lane shadowed by a gate right now: try again shortly
+        else {
+          game.trickleT = tr.every;
+          const type = (game.level >= 3 && Math.random() < 0.3) ? 'runner' : 'walker';
+          Zb.spawnPack(lane, sz, type, tr.count, game.data.hpMult);
+        }
+      }
+    }
     if (!game.bossSpawned && Q.z >= game.data.len - C.BOSS.spawnAhead) {
       game.bossSpawned = true;
       const bz = Q.z + C.BOSS.spawnAhead, hp = game.data.hpMult;
       Bo.spawn(game.data.boss.hp, game.data.boss.giant, bz, 0.5);
-      if (game.data.boss.giant) { Zb.spawnHorde(bz - 6, 16, hp); Zb.spawnHorde(bz + 8, 16, hp); }
-      else Zb.spawnPack('L', bz - 4, 'walker', 4, hp);
+      const mix = game.level >= 5 ? { runner: 0.3, brute: 0.2 } : null;
+      if (game.data.boss.giant) { Zb.spawnHorde(bz - 6, 24, hp, null, mix); Zb.spawnHorde(bz + 8, 24, hp, null, mix); }
+      else Zb.spawnHorde(bz - 4, 12, hp, null, mix);
     }
     Ga.update(dt, Q); Ba.update(dt, Q); Zb.update(dt, Q); Bo.update(dt, Q); Bu.update(dt, Q.z); F.update(dt);
     if (Q.n <= 0) { game.state = 'dying'; game.endT = 1.1; A.lose(); F.flash('#ff2d2d', 0.55); F.shake(10); }
@@ -152,7 +184,8 @@
     else { g.strokeStyle = '#ffffff'; g.lineWidth = 2; g.beginPath(); g.arc(x + 6, y, 7, -0.9, 0.9); g.stroke(); }
   }
   function drawHUD() {
-    S.drawText(g, 'LEVEL ' + game.level, 16, 30, 22, '#ffffff', '#102040', 1, 'left');
+    g.drawImage(S.vignette(cam.W, cam.H), 0, 0);
+    S.drawChip(g, 'LEVEL ' + game.level, 70, 30, 20, 'rgba(20,30,60,0.75)', 1);
     drawMute();
     // weapon
     S.drawIcon(g, Q.weapon, cam.W - 40, 78, 0.8, false);
@@ -190,6 +223,7 @@
       S.drawText(g, 'ROUTE CLEARED', cam.W / 2, cam.H * 0.36, 48, '#7dff7a', '#0a3a10');
       S.drawText(g, 'LEVEL ' + game.level + ' COMPLETE', cam.W / 2, cam.H * 0.36 + 56, 24, '#ffffff', '#102040');
       S.drawText(g, 'SQUAD ' + Q.n, cam.W / 2, cam.H * 0.36 + 90, 22, '#ffe27a', '#3a2a00');
+    if (Q.rateMult > 1 || Q.dmgBonus > 1) S.drawText(g, 'RATE x' + Q.rateMult.toFixed(1) + '   DMG x' + Q.dmgBonus.toFixed(1), cam.W / 2, cam.H * 0.36 + 120, 16, '#dddddd', '#101820');
       g.globalAlpha = 0.5 + blink * 0.5; S.drawText(g, 'TAP FOR NEXT LEVEL', cam.W / 2, cam.H * 0.62, 28, '#ffffff', '#102040'); g.globalAlpha = 1;
     } else if (game.state === 'lose') {
       overlay(0.55);

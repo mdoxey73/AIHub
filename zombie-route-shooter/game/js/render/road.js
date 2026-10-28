@@ -36,6 +36,19 @@
       quad(g, dz0, -0.513, -0.487, dz1, -0.513, -0.487);
       quad(g, dz0, 0.487, 0.513, dz1, 0.487, 0.513);
     }
+    // debris, oil stains and cracks (deterministic per road position)
+    const d0 = Math.floor((squadZ + DZ_NEAR) / 5), d1 = Math.floor((squadZ + 100) / 5);
+    for (let k = d0; k <= d1; k++) {
+      const h = ((k * 2654435761) >>> 0) % 1000;
+      if (h % 7 > 3) continue;
+      const dz = k * 5 + (h % 50) / 10 - squadZ; if (dz < DZ_NEAR) continue;
+      const x = -0.92 + (h % 184) / 100;
+      cam.project(dz, x, pa);
+      if (h % 3 === 0) { g.fillStyle = 'rgba(0,0,0,0.28)'; S.ell(g, pa.x, pa.y, (10 + h % 12) * pa.s, (3 + h % 4) * pa.s); g.fill(); }
+      else if (h % 3 === 1) { g.strokeStyle = 'rgba(0,0,0,0.35)'; g.lineWidth = Math.max(1, 1.5 * pa.s); g.beginPath(); g.moveTo(pa.x - 12 * pa.s, pa.y); g.lineTo(pa.x - 2 * pa.s, pa.y - 7 * pa.s); g.lineTo(pa.x + 6 * pa.s, pa.y - 2 * pa.s); g.lineTo(pa.x + 14 * pa.s, pa.y - 9 * pa.s); g.stroke(); }
+      else { g.fillStyle = '#6b6050'; g.fillRect(pa.x - 3 * pa.s, pa.y - 3 * pa.s, 6 * pa.s, 3 * pa.s); g.fillStyle = '#8a8070'; g.fillRect(pa.x + 4 * pa.s, pa.y - 2 * pa.s, 4 * pa.s, 2 * pa.s); }
+    }
+    ZRS.fx.drawDecals(g, squadZ);
     // median (raised strip)
     g.fillStyle = '#5b5e68'; quad(g, DZ_NEAR, -0.05, 0.05, far, -0.05, 0.05);
     g.fillStyle = K.median; quad(g, DZ_NEAR, -0.045, 0.045, far, -0.045, 0.045, 9, 9);

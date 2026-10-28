@@ -32,10 +32,10 @@
   G.onShot = function (gt, bullet, squadZ) {
     gt.hits++;
     if (gt.holes.length < 14) gt.holes.push({ dx: (bullet.x - (gt.xmin + gt.xmax) / 2) / ((gt.xmax - gt.xmin) / 2), dy: Math.random() * 0.8 + 0.1 });
-    if (gt.ups < C.GATE_MAX_UPGRADES && gt.hits >= gt.need) {
-      gt.hits = 0; gt.need *= 2; gt.ups++;
+    if (gt.hits >= gt.need) {
+      gt.hits = 0; gt.need += C.GATE_SHOT_HITS_STEP; gt.ups++;
       if (gt.op === '+') gt.value = Math.min(C.GATE_PLUS_CAP, gt.value + 1);
-      else gt.value = Math.min(C.GATE_MULT_CAP, Math.round((gt.value + 0.2) * 10) / 10);
+      else gt.value = Math.min(C.GATE_MULT_CAP, Math.round((gt.value + C.GATE_MULT_STEP) * 10) / 10);
       gt.flashT = 0.25;
     }
   };
@@ -63,8 +63,10 @@
     const s = pa.s, h = C.GATE_H * s, y = pa.y;
     const color = S.gateColor(gt.op);
     const alpha = gt.passed ? 0.18 : 0.42;
+    g.globalAlpha = 0.14; g.fillStyle = color; g.fillRect(pa.x - 6 * s, y - h - 6 * s, pb.x - pa.x + 12 * s, h + 12 * s);
     g.globalAlpha = alpha + (gt.flashT > 0 ? 0.3 : 0);
     g.fillStyle = color; g.fillRect(pa.x, y - h, pb.x - pa.x, h);
+    g.globalAlpha = Math.min(1, alpha + 0.25); g.fillStyle = '#ffffff'; g.fillRect(pa.x, y - h, pb.x - pa.x, 3 * s);
     g.globalAlpha = Math.min(1, alpha + 0.4);
     g.strokeStyle = '#ffffff'; g.lineWidth = Math.max(1, 1.5 * s); g.strokeRect(pa.x, y - h, pb.x - pa.x, h);
     g.globalAlpha = 1;

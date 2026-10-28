@@ -7,13 +7,33 @@
   for (let i = 0; i < C.MAX_PARTICLES; i++) particles.push({ a: false, x: 0, y: 0, vx: 0, vy: 0, life: 0, max: 1, size: 2, color: '#fff', grav: 0, kind: 0 });
   for (let i = 0; i < C.MAX_FLOATERS; i++) floaters.push({ a: false, x: 0, y: 0, vy: 0, life: 0, max: 1, text: '', color: '#fff', px: 16 });
   let pi = 0, fi = 0;
+  const decals = [];
+  for (let i = 0; i < C.MAX_DECALS; i++) decals.push({ a: false, z: 0, x: 0, size: 1, seed: 0 });
+  let di = 0;
   let shakeMag = 0, shakeX = 0, shakeY = 0;
   let flashA = 0, flashColor = '#fff';
   let hitstop = 0;
   let banner = null, bannerT = 0, bannerMax = 0;
 
+  F.decal = function (z, x, size) {
+    const d = decals[di]; di = (di + 1) % decals.length;
+    d.a = true; d.z = z; d.x = x; d.size = size || 1; d.seed = Math.random();
+  };
+  F.drawDecals = function (g, squadZ) {
+    const cam = ZRS.cam, p = {};
+    for (let i = 0; i < decals.length; i++) {
+      const d = decals[i]; if (!d.a) continue;
+      const dz = d.z - squadZ;
+      if (dz < -C.CULL_BEHIND) { d.a = false; continue; }
+      if (dz > C.DRAW_FAR) continue;
+      cam.project(dz, d.x, p);
+      g.fillStyle = 'rgba(110,14,14,0.55)';
+      S.ell(g, p.x, p.y, 16 * p.s * d.size, 6 * p.s * d.size); g.fill();
+      S.ell(g, p.x + 9 * p.s * d.size * (d.seed - 0.5), p.y - 3 * p.s, 6 * p.s * d.size, 3 * p.s * d.size); g.fill();
+    }
+  };
   F.reset = function () {
-    particles.forEach(p => p.a = false); floaters.forEach(f => f.a = false);
+    particles.forEach(p => p.a = false); floaters.forEach(f => f.a = false); decals.forEach(d => d.a = false);
     shakeMag = 0; flashA = 0; hitstop = 0; banner = null;
   };
 

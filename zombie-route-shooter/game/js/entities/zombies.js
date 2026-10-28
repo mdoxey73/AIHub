@@ -11,6 +11,7 @@
 
   Z.reset = function () { pool.forEach(z => z.a = false); alive = 0; };
   Z.aliveCount = function () { return alive; };
+  Z.contactMult = 1; // set per level by main.js
   Z.spawn = function (type, z, x, hpMult) {
     const def = C.ZOMBIE[type] || C.ZOMBIE.walker;
     // find a free slot; if the pool is full, reuse the farthest one
@@ -19,7 +20,7 @@
     if (!zb) return null;
     zb.a = true; zb.type = type; zb.z = z; zb.x = Math.max(-0.95, Math.min(0.95, x));
     zb.hp = zb.maxHp = Math.max(1, Math.round(def.hp * (hpMult || 1)));
-    zb.speed = def.speed * (0.9 + Math.random() * 0.2); zb.w = def.w; zb.contactKills = def.contactKills;
+    zb.speed = def.speed * (0.9 + Math.random() * 0.2); zb.w = def.w; zb.contactKills = Math.round(def.contactKills * Z.contactMult);
     zb.dead = false; zb.deadT = 0; zb.anim = Math.random() * 10; zb.hitT = 0;
     alive++;
     return zb;
@@ -33,12 +34,15 @@
       Z.spawn(type, z + row * 1.3 + Math.random() * 0.4, x, hpMult);
     }
   };
-  Z.spawnHorde = function (z, count, hpMult, type) {
-    const cols = 8;
+  // mix: { runner: 0.3, brute: 0.2 } fractions; the rest are walkers
+  Z.spawnHorde = function (z, count, hpMult, type, mix) {
+    const cols = 10;
     for (let i = 0; i < count; i++) {
       const row = Math.floor(i / cols), col = i % cols;
-      const x = -0.875 + col * 0.25 + (Math.random() - 0.5) * 0.1 + (row % 2) * 0.12;
-      Z.spawn(type || 'walker', z + row * 1.1 + Math.random() * 0.4, x, hpMult);
+      const x = -0.9 + col * 0.2 + (Math.random() - 0.5) * 0.08 + (row % 2) * 0.1;
+      let t = type || 'walker';
+      if (mix) { const r = Math.random(); if (r < (mix.brute || 0)) t = 'brute'; else if (r < (mix.brute || 0) + (mix.runner || 0)) t = 'runner'; }
+      Z.spawn(t, z + row * 1.2 + Math.random() * 0.5, x, hpMult);
     }
   };
 
@@ -63,6 +67,7 @@
     zb.hp = 0; zb.dead = true; zb.deadT = 0.55; alive--;
     cam.project(zb.z - squadZ, zb.x, pa);
     if (pa.s > 0.1) F.splat(pa.x, pa.y - 10 * pa.s, pa.s);
+    F.decal(zb.z, zb.x, zb.type === 'brute' ? 1.6 : 1);
     A.zombieDie();
   };
 

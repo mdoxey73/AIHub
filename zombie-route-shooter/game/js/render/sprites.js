@@ -254,16 +254,30 @@
   };
   drawers.tankprop = function (g) { g.save(); g.scale(100 / 120, 52 / 64); drawers.vehicle(g); g.restore(); };
 
-  // Returns a cached canvas for the unit at scale bucket b.
+  const OUTLINED = { soldier: 1, walker: 1, runner: 1, brute: 1, boss: 1, drone: 1 };
+  // Returns a cached canvas for the unit at scale bucket b. Units get a dark
+  // 1px outline (drawn once into the cache) so they read against the asphalt.
   S.unit = function (kind, variant, frame, s) {
     const b = S.bucket(s);
     const base = BASE[kind];
     const key = 'u|' + kind + '|' + variant + '|' + frame + '|' + b.toFixed(3);
-    const w = base[0] * b, h = base[1] * b;
-    return getCanvas(key, w + 2, h + 2, function (g) {
-      g.save(); g.translate(1, 1); g.scale(b, b);
-      drawers[kind](g, variant, frame || 0);
-      g.restore();
+    const w = base[0] * b + 2, h = base[1] * b + 2;
+    return getCanvas(key, w, h, function (g, W, H) {
+      if (OUTLINED[kind] && b > 0.25) {
+        const tmp = document.createElement('canvas'); tmp.width = W; tmp.height = H;
+        const tg = tmp.getContext('2d');
+        tg.save(); tg.translate(1, 1); tg.scale(b, b); drawers[kind](g === tg ? g : tg, variant, frame || 0); tg.restore();
+        const sil = document.createElement('canvas'); sil.width = W; sil.height = H;
+        const sg = sil.getContext('2d');
+        sg.drawImage(tmp, 0, 0); sg.globalCompositeOperation = 'source-in'; sg.fillStyle = 'rgba(10,10,18,0.9)'; sg.fillRect(0, 0, W, H);
+        const o = Math.max(1, Math.round(b));
+        g.drawImage(sil, o, 0); g.drawImage(sil, -o, 0); g.drawImage(sil, 0, o); g.drawImage(sil, 0, -o);
+        g.drawImage(tmp, 0, 0);
+      } else {
+        g.save(); g.translate(1, 1); g.scale(b, b);
+        drawers[kind](g, variant, frame || 0);
+        g.restore();
+      }
     });
   };
   // Draw a unit anchored at bottom-center (sx, sy) with exact scale s.
@@ -324,6 +338,28 @@
     g.drawImage(c, sx - w / 2, sy - h / 2, w, h);
   };
 
+  // Rounded label chip with cached text, centered at (x, y); scale multiplies size.
+  S.drawChip = function (g, str, x, y, px, color, scale) {
+    scale = scale || 1;
+    const t = S.text(str, px, '#ffffff', '#102040');
+    const w = t.width * scale + 10 * scale, h = t.height * scale + 2 * scale;
+    g.fillStyle = color; rr(g, x - w / 2, y - h / 2, w, h, 6 * scale); g.fill();
+    g.strokeStyle = 'rgba(255,255,255,0.85)'; g.lineWidth = Math.max(1, 1.5 * scale); rr(g, x - w / 2, y - h / 2, w, h, 6 * scale); g.stroke();
+    g.drawImage(t, x - t.width * scale / 2, y - t.height * scale / 2, t.width * scale, t.height * scale);
+  };
+  // Vignette overlay (cached per size).
+  let vig = null, vigKey = '';
+  S.vignette = function (W, H) {
+    const key = W + 'x' + H;
+    if (vig && vigKey === key) return vig;
+    vig = document.createElement('canvas'); vig.width = W; vig.height = H; vigKey = key;
+    const g = vig.getContext('2d');
+    const gr = g.createRadialGradient(W / 2, H * 0.55, H * 0.35, W / 2, H * 0.55, H * 0.85);
+    gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(0,0,0,0.42)');
+    g.fillStyle = gr; g.fillRect(0, 0, W, H);
+    return vig;
+  };
+
   // ---------------------------------------------------------------- gates (drawn live; text cached)
   S.gateColor = function (op) {
     const K = C.COLORS;
@@ -347,6 +383,12 @@
     const g = backdrop.getContext('2d');
     const sky = g.createLinearGradient(0, 0, 0, H); sky.addColorStop(0, K.sky1); sky.addColorStop(1, K.sky2);
     g.fillStyle = sky; g.fillRect(0, 0, W, H);
+    // sun glow and clouds
+    const sun = g.createRadialGradient(W * 0.78, H * 0.22, 4, W * 0.78, H * 0.22, 120);
+    sun.addColorStop(0, 'rgba(255,240,200,0.95)'); sun.addColorStop(0.15, 'rgba(255,230,170,0.6)'); sun.addColorStop(1, 'rgba(255,230,170,0)');
+    g.fillStyle = sun; g.fillRect(0, 0, W, H);
+    g.fillStyle = 'rgba(255,255,255,0.75)';
+    [[60, 50, 28], [95, 40, 22], [130, 52, 18], [300, 30, 24], [335, 24, 18], [365, 34, 20], [470, 62, 20], [500, 56, 16]].forEach(c => { circ(g, c[0], c[1], c[2]); g.fill(); });
     // mountains
     g.fillStyle = '#9fb6c4'; g.beginPath(); g.moveTo(0, H - 60);
     for (let x = 0; x <= W; x += 30) g.lineTo(x, H - 70 - Math.abs(Math.sin(x * 0.05) * 40 + Math.sin(x * 0.013) * 30));
@@ -355,6 +397,8 @@
     g.fillStyle = '#5f6a73';
     const bl = [[0, 70, 30], [40, 40, 60], [90, 30, 120], [130, 60, 40], [200, 20, 150], [240, 60, 55], [320, 40, 90], [370, 30, 130], [420, 80, 45], [500, 40, 95]];
     bl.forEach(b => { g.fillRect(b[0], H - 30 - b[2], b[1], b[2] + 30); });
+    g.fillStyle = 'rgba(255,220,120,0.55)';
+    bl.forEach(b => { for (let y = H - 22 - b[2]; y < H - 36; y += 12) for (let x = b[0] + 5; x < b[0] + b[1] - 4; x += 9) if (((x * 7 + y * 13) % 5) < 2) g.fillRect(x, y, 3, 4); });
     g.fillStyle = 'rgba(120,200,120,0.5)';
     [[100, 110], [215, 140], [385, 120]].forEach(p => { circ(g, p[0], H - 30 - p[1] - 10, 12); g.fill(); circ(g, p[0] + 10, H - 30 - p[1] - 24, 10); g.fill(); });
     // crane

@@ -57,7 +57,7 @@
     } else {
       Bo.z = squad.z + 1.2;
       Bo.x += (squad.x - Bo.x) * Math.min(1, 4 * dt);
-      Bo.killAcc += C.BOSS.contactKillsPerSec * dt;
+      Bo.killAcc += Math.max(C.BOSS.contactKillsPerSec, squad.n * C.BOSS.contactFrac) * dt;
       while (Bo.killAcc >= 1) { Bo.killAcc -= 1; squad.lose(1, 'boss'); }
     }
     if (Bo.giant) {

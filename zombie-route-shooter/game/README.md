@@ -20,6 +20,15 @@ Service workers need HTTPS or `localhost`, so a plain `http://192.168.x.x:8000` 
 
 **As a single file.** `python build-single.py` writes `dist/zombie-route-shooter.html` with every script and the stylesheet inlined (about 100 KB, no icons, no service worker). Send that file to the phone any way you like. Android Chrome opens it from the Files app. iPhone is less reliable with local HTML files; use the home-screen install instead.
 
+## How it plays
+
+- The squad auto-runs up a two-lane highway and fires straight ahead. Its count is the resource.
+- **Gates** (`+k`, `xk`, `-k`, `÷k`) apply to the count when the squad's center crosses them. Positive gates grow when shot (first upgrade after 8 hits, each further one needs 6 more); bullets pass through gates, so zombies behind them are fair game. Chains are spaced 7 m apart.
+- **Barrels** show their HP as a number and must be shot to zero. Weapon barrels (minigun, shotgun, RPG, drone, armored vehicle) hand the squad that weapon. Bonus barrels give `+N` soldiers, `RATE+` (+20% fire rate, up to 2x) or `DMG+` (+20% damage, up to 2x). Explosive barrels blow up in an area and chain; running into one alive costs soldiers.
+- **Zombies**: walkers, runners (fast, from level 3) and brutes (tanky, kill 6 on contact, from level 5). Packs, hordes of up to 64, and a steady trickle of small packs so the road is never empty. Each zombie that reaches the squad takes soldiers with it.
+- **Boss** at the end of every level; Giants on 5, 10, 15 with escort hordes. Kill it before it reaches you.
+- The count is capped at 9999, like the ads. Fire power stops scaling past about 700 soldiers, so bosses are a real fight.
+
 ## Controls
 
 - **Drag left / right** (touch or mouse) to steer the squad. Everything else is automatic: running, firing, gates, barrels.
@@ -29,6 +38,7 @@ Service workers need HTTPS or `localhost`, so a plain `http://192.168.x.x:8000` 
 ## Debug
 
 - `index.html?debug=1` shows FPS and entity counts and enables keys: **n** adds 10 soldiers, **k** kills the boss, **l** skips to the next level, **g** toggles god mode.
+- Headless verification scripts (Playwright) used during development are described in the plan's build log; a scripted steering AI wins every level 1-12 while a non-steering run loses by 70 m.
 - `index.html?level=7` starts the title screen on level 7.
 - Progress (highest unlocked level, mute) is stored in `localStorage` under `zrs.save.v1`.
 

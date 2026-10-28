@@ -75,10 +75,11 @@
       b.z += step; b.travel += step;
       if (!isNaN(b.tx)) b.x += (b.tx - b.x) * Math.min(1, 9 * dt);
       if (b.travel > b.range || b.z - squadZ > C.FAR) { free(b); continue; }
+      // --- gates: upgrade on hit; absorb the bullet only if configured ---
+      const gt = ZRS.gates.hitTest(b.prevZ, b.z, b.x);
+      if (gt) { ZRS.gates.onShot(gt, b, squadZ); if (C.GATES_ABSORB_BULLETS) { free(b); continue; } }
       // --- hit resolution: nearest object crossed in [prevZ, z] ---
       let hitZ = Infinity, hitKind = 0, hitObj = null;
-      const gt = ZRS.gates.hitTest(b.prevZ, b.z, b.x);
-      if (gt && gt.z < hitZ) { hitZ = gt.z; hitKind = 1; hitObj = gt; }
       const br = ZRS.barrels.hitTest(b.prevZ, b.z, b.x);
       if (br && br.z < hitZ) { hitZ = br.z; hitKind = 2; hitObj = br; }
       const bo = ZRS.boss;
@@ -87,8 +88,7 @@
       if (zb && zb.z < hitZ) { hitZ = zb.z; hitKind = 4; hitObj = zb; }
       if (!hitKind) continue;
       if (b.kind === 'rocket') { B.explodeAt(hitZ, b.x, b.dmg, b.aoe, squadZ); free(b); continue; }
-      if (hitKind === 1) ZRS.gates.onShot(hitObj, b, squadZ);
-      else if (hitKind === 2) ZRS.barrels.damage(hitObj, b.dmg, b, squadZ);
+      if (hitKind === 2) ZRS.barrels.damage(hitObj, b.dmg, b, squadZ);
       else if (hitKind === 3) bo.damage(b.dmg, b, squadZ);
       else ZRS.zombies.damage(hitObj, b.dmg, b, squadZ);
       free(b);

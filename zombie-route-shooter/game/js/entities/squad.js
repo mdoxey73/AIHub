@@ -2,7 +2,7 @@
    MAX_DRAWN_SOLDIERS, drag-steered x, automatic fire, weapons, drone, vehicle. */
 (function () {
   const C = ZRS.CONFIG, cam = ZRS.cam, S = ZRS.sprites, F = ZRS.fx, A = ZRS.audio;
-  const Q = { n: 0, z: 0, prevZ: 0, x: 0, targetX: 0, halfW: 0.08, depth: 0.5, weapon: 'pistol', drone: false, vehicle: false, soldiers: [], labelPop: 0, overflowAcc: 0, droneT: 0, droneX: 0, time: 0, god: false };
+  const Q = { n: 0, z: 0, prevZ: 0, x: 0, targetX: 0, halfW: 0.08, depth: 0.5, weapon: 'pistol', drone: false, vehicle: false, rateMult: 1, dmgBonus: 1, soldiers: [], labelPop: 0, overflowAcc: 0, droneT: 0, droneX: 0, time: 0, god: false };
   const pa = {}, pb = {};
 
   // Hex-lattice formation offsets, sorted so the blob stays round as it grows.
@@ -19,7 +19,7 @@
 
   Q.reset = function (n, weapon) {
     Q.n = n; Q.z = 0; Q.prevZ = 0; Q.x = -0.5; Q.targetX = -0.5; Q.weapon = weapon || 'pistol';
-    Q.drone = false; Q.vehicle = false; Q.soldiers.length = 0; Q.labelPop = 0; Q.overflowAcc = 0; Q.time = 0; Q.droneX = -0.5;
+    Q.drone = false; Q.vehicle = false; Q.rateMult = 1; Q.dmgBonus = 1; Q.soldiers.length = 0; Q.labelPop = 0; Q.overflowAcc = 0; Q.time = 0; Q.droneX = -0.5;
     syncSoldiers(false);
   };
 
@@ -40,7 +40,7 @@
   }
 
   Q.setN = function (n, fx) {
-    n = Math.max(0, Math.floor(n));
+    n = Math.min(C.SQUAD_MAX_N, Math.max(0, Math.floor(n)));
     if (n === Q.n) return 0;
     const delta = n - Q.n;
     Q.n = n; Q.labelPop = 0.3;
@@ -67,7 +67,16 @@
     else { Q.weapon = weapon; F.banner(C.WEAPONS[weapon].name + '!', 0.9); }
     F.flash('#ffe27a', 0.25); A.pickup();
   };
-  Q.dmgMult = function () { return Q.vehicle ? C.VEHICLE_DMG_MULT : 1; };
+  // Damage per bullet carries the whole squad's strength: N^FIRE_EXP shooters' worth spread over the drawn soldiers.
+  Q.effective = function () { const d = C.MAX_DRAWN_SOLDIERS; return Math.min(Q.n, d) + Math.pow(Math.max(0, Q.n - d), C.FIRE_EXP); };
+  Q.dmgMult = function () { return (Q.vehicle ? C.VEHICLE_DMG_MULT : 1) * Q.dmgBonus * (Q.effective() / Math.max(1, Q.soldiers.length)); };
+  // Bonus barrels: squad (+N soldiers), rate (+fire rate), dmg (+damage)
+  Q.grantBonus = function (type, amount) {
+    if (type === 'squad') { Q.setN(Q.n + amount, true); F.banner('+' + amount + ' SQUAD!', 0.9); }
+    else if (type === 'rate') { Q.rateMult = Math.min(C.BONUS.rateCap, Q.rateMult + C.BONUS.rateStep); F.banner('FIRE RATE UP!', 0.9); }
+    else if (type === 'dmg') { Q.dmgBonus = Math.min(C.BONUS.dmgCap, Q.dmgBonus + C.BONUS.dmgStep); F.banner('DAMAGE UP!', 0.9); }
+    F.flash('#7dff7a', 0.2); A.pickup();
+  };
 
   function fireFrom(dz, dx, sol) {
     const w = C.WEAPONS[Q.weapon];
@@ -92,26 +101,20 @@
     if (Q.labelPop > 0) Q.labelPop -= dt;
     if (Q.n <= 0) return;
     const w = C.WEAPONS[Q.weapon];
-    const period = 1 / w.rate;
+    const period = 1 / (w.rate * Q.rateMult);
     for (let i = 0; i < Q.soldiers.length; i++) {
       const s = Q.soldiers[i];
       if (s.flashT > 0) s.flashT -= dt; if (s.pop > 0) s.pop -= dt;
       s.fireT -= dt;
       if (s.fireT <= 0) { fireFrom(s.dz, s.dx, s); s.fireT += period * (0.9 + s.seed * 0.2); }
     }
-    const extra = Math.min(C.OVERFLOW_FIRE_CAP, C.OVERFLOW_FIRE_FACTOR * Math.max(0, Q.n - Q.soldiers.length));
-    if (extra > 0) {
-      Q.overflowAcc += extra * w.rate * dt;
-      let guard = 0;
-      while (Q.overflowAcc >= 1 && guard++ < 20) { Q.overflowAcc -= 1; const s = Q.soldiers[Math.floor(Math.random() * Q.soldiers.length)]; fireFrom(s.dz, s.dx, null); }
-    }
     if (Q.drone) {
       Q.droneX += ((Q.x + Math.sin(Q.time * 1.7) * 0.25) - Q.droneX) * Math.min(1, 3 * dt);
       Q.droneT -= dt;
       if (Q.droneT <= 0) {
-        Q.droneT = 1 / C.WEAPONS.drone.rate;
+        Q.droneT = 1 / (C.WEAPONS.drone.rate * Q.rateMult);
         const tx = ZRS.bullets.aimX(Q.droneX, Q.z + 1.5, 1.2, 70);
-        if (!isNaN(tx)) { ZRS.bullets.spawn(Q.z + 1.5, Q.droneX, 'drone', Q.dmgMult(), tx); A.shot('laser'); }
+        if (!isNaN(tx)) { ZRS.bullets.spawn(Q.z + 1.5, Q.droneX, 'drone', (Q.vehicle ? C.VEHICLE_DMG_MULT : 1) * Q.dmgBonus * Math.max(1, Q.effective() / 8), tx); A.shot('laser'); }
       }
     }
   };
