@@ -1,5 +1,7 @@
-/* barrels.js — numbered barrels and crates. The number is HP; it must be shot
-   to zero to collect what sits on top. Kinds:
+/* barrels.js — numbered supply stands and explosive barrels. The number is HP;
+   it must be shot to zero to collect what sits on top. Weapon and bonus stands
+   stand still in the supply lane (no rolling, no bobbing); explosive barrels
+   sit among the zombies in the enemy lane. Kinds:
      weapon    unlocks the weapon hovering above it (pistol..rpg, drone, vehicle)
      bonus     squad (+N soldiers), rate (+fire rate) or dmg (+damage)
      explosive area blast that chains; running into one alive costs soldiers
@@ -15,9 +17,9 @@
 
   R.reset = function () { pool.forEach(b => b.a = false); };
   // spawn(z, lane, kind, hp, payload, amount): payload is a weapon name or a bonus type
-  R.spawn = function (z, lane, kind, hp, payload, amount) {
+  R.spawn = function (z, lane, kind, hp, payload, amount, x) {
     const b = pool[next]; next = (next + 1) % pool.length;
-    b.a = true; b.z = z; b.lane = lane; b.x = lane === 'L' ? -0.5 : lane === 'R' ? 0.5 : 0;
+    b.a = true; b.z = z; b.lane = lane; b.x = x != null ? x : (C.LANE_X[lane] != null ? C.LANE_X[lane] : 0);
     b.kind = kind; b.hp = b.maxHp = hp; b.broken = false; b.hitT = 0; b.bob = Math.random() * 6;
     b.weapon = kind === 'weapon' ? payload : null;
     b.bonus = kind === 'bonus' ? payload : null;
@@ -58,7 +60,6 @@
     for (let i = 0; i < pool.length; i++) {
       const b = pool[i]; if (!b.a) continue;
       if (b.hitT > 0) b.hitT -= dt;
-      b.bob += dt * 3;
       if (!b.broken) {
         const dz = b.z - squad.z;
         if (dz < 0.9 && dz > -0.9 && Math.abs(b.x - squad.x) < squad.halfW + C.BARREL_W) R.breakIt(b, squad.z, true);
@@ -76,22 +77,26 @@
     const dz = b.z - squadZ;
     cam.project(dz, b.x, pa);
     const s = pa.s;
-    const kind = b.big ? 'crate' : 'barrel';
-    const sc = b.big ? s * 1.15 : s;
-    if (b.kind === 'explosive' && s > 0.1) { g.fillStyle = 'rgba(255,80,40,0.25)'; S.ell(g, pa.x, pa.y - 28 * s, 42 * s, 36 * s); g.fill(); }
-    S.drawUnit(g, kind, b.kind === 'explosive' ? 'explosive' : 'wood', 0, pa.x, pa.y, b.hitT > 0 ? sc * 1.06 : sc);
-    const bodyH = (b.big ? 70 * 1.15 : 64) * s;
-    if (s > 0.08) S.drawText(g, String(Math.ceil(b.hp)), pa.x, pa.y - bodyH * 0.5, 40, '#ffffff', '#3a1a05', s * (b.big ? 1.1 : 1));
-    if (s <= 0.07 || b.kind === 'explosive') return;
+    if (b.kind === 'explosive') {
+      if (s > 0.1) { g.fillStyle = 'rgba(255,80,40,0.25)'; S.ell(g, pa.x, pa.y - 28 * s, 42 * s, 36 * s); g.fill(); }
+      S.drawUnit(g, 'barrel', 'explosive', 0, pa.x, pa.y, b.hitT > 0 ? s * 1.06 : s);
+      if (s > 0.08) S.drawText(g, String(Math.ceil(b.hp)), pa.x, pa.y - 32 * s, 40, '#ffffff', '#3a1a05', s);
+      return;
+    }
+    // supply stand: a fixed plinth with the HP number, the reward mounted on top
+    const sc = b.big ? s * 1.12 : s;
+    const variant = b.kind === 'weapon' ? 'weapon' : b.bonus;
+    S.drawUnit(g, 'stand', variant, 0, pa.x, pa.y, b.hitT > 0 ? sc * 1.05 : sc);
+    const bodyH = S.BASE.stand[1] * sc;
+    if (s > 0.08) S.drawText(g, String(Math.ceil(b.hp)), pa.x, pa.y - bodyH * 0.42, 38, '#ffffff', '#1a1205', sc);
+    if (s <= 0.07) return;
     const top = pa.y - bodyH;
-    const bob = Math.sin(b.bob) * 4 * s;
-    g.fillStyle = 'rgba(255,214,80,0.55)'; S.ell(g, pa.x, top - 6 * s, 34 * s, 9 * s); g.fill();
     if (b.kind === 'weapon') {
-      S.drawIcon(g, b.weapon, pa.x, top - 26 * s + bob, s * 1.1, true);
-      S.drawText(g, (C.WEAPONS[b.weapon] ? C.WEAPONS[b.weapon].name : b.weapon.toUpperCase()), pa.x, top - 50 * s + bob, 14, '#7dff7a', '#0a3a10', Math.min(1.2, s * 1.1));
+      S.drawIcon(g, b.weapon, pa.x, top - 14 * sc, sc * 1.15, true);
+      S.drawText(g, (C.WEAPONS[b.weapon] ? C.WEAPONS[b.weapon].name : b.weapon.toUpperCase()), pa.x, top - 38 * sc, 14, '#7dff7a', '#0a3a10', Math.min(1.2, sc * 1.1));
     } else {
-      const col = b.bonus === 'squad' ? '#7ab8ff' : b.bonus === 'rate' ? '#ffd24a' : '#ff8a5a';
-      S.drawChip(g, bonusLabel(b), pa.x, top - 26 * s + bob, 22, col, Math.min(1.3, s * 1.2));
+      const col = b.bonus === 'squad' ? '#2f7cff' : b.bonus === 'rate' ? '#e0a400' : '#e0562a';
+      S.drawChip(g, bonusLabel(b), pa.x, top - 16 * sc, 22, col, Math.min(1.3, sc * 1.2));
     }
   };
   ZRS.barrels = R;

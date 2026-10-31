@@ -18,8 +18,8 @@
   })();
 
   Q.reset = function (n, weapon) {
-    Q.n = n; Q.z = 0; Q.prevZ = 0; Q.x = -0.5; Q.targetX = -0.5; Q.weapon = weapon || 'pistol';
-    Q.drone = false; Q.vehicle = false; Q.rateMult = 1; Q.dmgBonus = 1; Q.soldiers.length = 0; Q.labelPop = 0; Q.overflowAcc = 0; Q.time = 0; Q.droneX = -0.5;
+    Q.n = n; Q.z = 0; Q.prevZ = 0; Q.x = 0; Q.targetX = 0; Q.weapon = weapon || 'pistol';
+    Q.drone = false; Q.vehicle = false; Q.rateMult = 1; Q.dmgBonus = 1; Q.soldiers.length = 0; Q.labelPop = 0; Q.overflowAcc = 0; Q.time = 0; Q.droneX = 0;
     syncSoldiers(false);
   };
 

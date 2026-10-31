@@ -1,7 +1,11 @@
 /* config.js — every tunable constant in one place.
    Units: road distance (z) in meters; lateral position (x) in "lane units"
-   where -1 is the left road edge, 0 the median and +1 the right road edge.
-   The left lane is x in [-1, 0], the right lane is x in [0, 1]. */
+   where -1 is the left road edge, 0 the road center and +1 the right road edge.
+   The road has three lanes, each with one job (see LANE_ROLE):
+     L  x in [-1, -1/3]   supply lane: static weapon and bonus stands
+     M  x in [-1/3, 1/3]  enemy lane: zombie packs, hordes, explosive barrels
+     R  x in [1/3, 1]     gate lane: +k / xk / -k / ÷k gates
+   Zombies home toward the squad when close, so they spill out of their lane. */
 window.ZRS = window.ZRS || {};
 ZRS.CONFIG = {
   // ---- Playfield (logical 9:16 canvas, letterboxed into the window) ----
@@ -16,6 +20,15 @@ ZRS.CONFIG = {
   FAR: 220,                 // farthest road distance drawn
   DRAW_FAR: 120,            // entities beyond this are simulated but not drawn
   CULL_BEHIND: 6,           // entities this far behind the squad are freed
+
+  // ---- Lanes ----
+  LANES: {
+    L: { c: -2 / 3, min: -1, max: -1 / 3 },
+    M: { c: 0, min: -1 / 3, max: 1 / 3 },
+    R: { c: 2 / 3, min: 1 / 3, max: 1 },
+  },
+  LANE_X: { L: -2 / 3, M: 0, R: 2 / 3 },
+  LANE_ROLE: { supply: 'L', enemy: 'M', gate: 'R' },
 
   // ---- Movement ----
   SQUAD_SPEED: 7,           // m/s forward
@@ -39,25 +52,26 @@ ZRS.CONFIG = {
   GATE_MULT_CAP: 4,         // highest multiplier a multiply gate can be pumped to
   GATE_MULT_STEP: 0.1,      // multiplier gained per upgrade
   GATES_ABSORB_BULLETS: true, // classic: shooting a gate pumps it and stops the bullet (pumping costs fire)
-  GATE_SHADOW: [22, 46],    // a pack this far behind a gate (same lane) would still be behind it when the squad arrives; layouts avoid it
   GATE_CHAIN_SPACING: 12,   // meters between gates in a chain (never stacked)
   GATE_H: 84,               // gate height in px at scale 1
   SPAWN_AHEAD: 95,          // meters ahead at which track segments spawn
 
   // ---- Zombies (hp is multiplied by the level's hpMult) ----
   ZOMBIE: {
-    walker: { hp: 25,  speed: 2.3, contactKills: 1, w: 0.12, size: 1.0 },
-    runner: { hp: 14,  speed: 5.2, contactKills: 1, w: 0.10, size: 0.9 },
-    brute:  { hp: 180, speed: 1.5, contactKills: 6, w: 0.18, size: 1.5 },
+    // many weak zombies: a walker falls to one or two pistol rounds at the level's hpMult
+    crawler: { hp: 4,   speed: 1.8, contactKills: 1, w: 0.08, size: 0.75 },
+    walker:  { hp: 9,   speed: 2.3, contactKills: 1, w: 0.09, size: 1.0 },
+    runner:  { hp: 6,   speed: 5.0, contactKills: 1, w: 0.08, size: 0.9 },
+    brute:   { hp: 70,  speed: 1.5, contactKills: 4, w: 0.15, size: 1.5 },
   },
-  ZOMBIE_HOMING: 0.35,      // lateral drift toward the squad (lane units/s) when close
+  ZOMBIE_HOMING: 0.32,      // lateral drift toward the squad (lane units/s) when close
   ZOMBIE_HOMING_RANGE: 22,  // meters
 
   // ---- Barrels ----
   EXPLOSION_DAMAGE: 160,
   EXPLOSION_RADIUS: 3.0,    // meters (lateral radius is EXPLOSION_RADIUS * 0.2 lane units)
   EXPLOSION_SQUAD_KILLS: 4, // soldiers lost when the squad runs into a live explosive barrel
-  BARREL_W: 0.22,           // lateral half width (lane units)
+  BARREL_W: 0.2,           // lateral half width (lane units)
   BARREL_D: 0.8,            // depth half extent (meters)
 
   // ---- Boss ----
@@ -94,13 +108,13 @@ ZRS.CONFIG = {
   },
 
   // ---- Pools / caps ----
-  MAX_ZOMBIES: 320,
+  MAX_ZOMBIES: 640,
   MAX_BULLETS: 600,
   MAX_PARTICLES: 300,
   MAX_FLOATERS: 60,
   MAX_GATES: 48,
   MAX_BARRELS: 32,
-  MAX_DECALS: 80,
+  MAX_DECALS: 120,
 
   // ---- Feel ----
   SHAKE_BOSS_HIT: 1.2,
@@ -109,6 +123,15 @@ ZRS.CONFIG = {
   SHAKE_LOSS: 4,
   HITSTOP_BOSS_DEATH_MS: 30,
   SFX_SHOT_PER_SEC: 12,     // throttle for shot sounds
+
+  // ---- Themes (one per level, cycling): palette, backdrop and roadside props ----
+  THEMES: {
+    city:   { sky1: '#66b3d6', sky2: '#d9e7ec', ground: '#6f6b63', asphalt: '#4b4d55', asphaltFar: '#6a6d78', asphaltNear: '#43454d', barrier: '#a7a9b2', barrierDark: '#7c7e88', haze: '217,231,236', led: '#4fd6ff', lane: '#e9e9e9', skyline: '#5f6a73', hills: '#9fb6c4', sun: '255,240,200', props: ['silo', 'sign', 'truck', 'chimney', 'lamp', 'wreck'] },
+    desert: { sky1: '#e9a25a', sky2: '#fbe2b2', ground: '#c99a5c', asphalt: '#5b5048', asphaltFar: '#7e6f60', asphaltNear: '#51473f', barrier: '#cdb38a', barrierDark: '#a88f68', haze: '251,226,178', led: '#ffb347', lane: '#f3e6c8', skyline: '#a0623a', hills: '#c98d5a', sun: '255,236,180', props: ['cactus', 'wreck', 'sign', 'rock', 'cactus', 'truck'] },
+    night:  { sky1: '#070c22', sky2: '#27325e', ground: '#24252c', asphalt: '#26272e', asphaltFar: '#33364a', asphaltNear: '#1f2026', barrier: '#5a5d70', barrierDark: '#3d4050', haze: '39,50,94', led: '#ff4fd8', lane: '#c9c9d9', skyline: '#141a33', hills: '#1d2547', sun: '220,230,255', props: ['lamp', 'wreck', 'sign', 'lamp', 'truck', 'chimney'], night: true },
+    snow:   { sky1: '#9db9cf', sky2: '#eef3f7', ground: '#e6edf2', asphalt: '#555a63', asphaltFar: '#7d838d', asphaltNear: '#4b5058', barrier: '#cdd7df', barrierDark: '#a4afb9', haze: '238,243,247', led: '#7ae0ff', lane: '#ffffff', skyline: '#7f93a6', hills: '#c7d6e2', sun: '255,255,240', props: ['pine', 'pine', 'sign', 'truck', 'pine', 'rock'], snow: true },
+    toxic:  { sky1: '#6f7a3e', sky2: '#c9d199', ground: '#4e573a', asphalt: '#3e4339', asphaltFar: '#5d6352', asphaltNear: '#373b32', barrier: '#8b9270', barrierDark: '#666c50', haze: '201,209,153', led: '#9dff4f', lane: '#e6eccc', skyline: '#3f4a2c', hills: '#7c8a52', sun: '230,255,170', props: ['chimney', 'silo', 'sign', 'wreck', 'chimney', 'rock'] },
+  },
 
   // ---- Colors ----
   COLORS: {

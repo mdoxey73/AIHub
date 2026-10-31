@@ -33,6 +33,7 @@
   resize();
   I.attach(canvas);
   Q.reset(1, 'pistol');
+  Road.setTheme(L.get(game.level).theme);
 
   // ------------------------------------------------------------ level flow
   function startLevel(n) {
@@ -41,40 +42,28 @@
     Zb.reset(); Bu.reset(); Ga.reset(); Ba.reset(); Bo.reset(); F.reset();
     game.segIdx = 0; game.bossSpawned = false; game.state = 'playing'; game.time = 0; game.endT = 0;
     game.hintT = n === 1 ? 3.2 : 0;
+    game.introT = 2.4;
+    Road.setTheme(game.data.theme);
     game.trickleT = game.data.trickle ? game.data.trickle.every : 0;
-    Zb.contactMult = n >= 9 ? 3 : n >= 5 ? 2 : 1; // late zombies take more soldiers per contact
+    Zb.contactMult = n >= 9 ? 2 : 1; // late zombies take more soldiers per contact
   }
   game.start = startLevel;
 
   function spawnSeg(s) {
-    const hp = game.data.hpMult;
+    const hp = game.data.hpMult, LR = C.LANE_ROLE;
     switch (s[0]) {
-      case 'chain': for (let i = 0; i < s[5]; i++) Ga.spawn(s[1] + i * (s[6] || 2.5), s[2], s[3], s[4]); break;
-      case 'pair': Ga.spawn(s[1], 'L', s[2], s[3]); Ga.spawn(s[1], 'R', s[4], s[5]); break;
-      case 'gate': Ga.spawn(s[1], s[2], s[3], s[4]); break;
-      case 'pack': Zb.spawnPack(s[2], s[1], s[3], s[4], hp); break;
-      case 'horde': Zb.spawnHorde(s[1], s[2], hp, s[3], game.level >= 5 ? { runner: 0.3, brute: 0.15 } : game.level >= 3 ? { runner: 0.25 } : null); break;
-      case 'barrel': Ba.spawn(s[1], s[2], s[3], s[4], s[5], s[6]); break;
+      case 'gate': Ga.spawn(s[1], LR.gate, s[2], s[3]); break;
+      case 'pack': Zb.spawnPack(LR.enemy, s[1], s[2], s[3], hp); break;
+      case 'horde': Zb.spawnHorde(s[1], s[2], hp, 'walker', s[3]); break;
+      case 'explosive': { const ln = C.LANES[LR.enemy]; Ba.spawn(s[1], LR.enemy, 'explosive', s[2], null, 0, ln.min + 0.12 + Math.random() * (ln.max - ln.min - 0.24)); break; }
+      case 'supply': Ba.spawn(s[1], LR.supply, s[2], s[3], s[4], s[5]); break;
     }
   }
 
-  // Pick a lane where a pack spawned at spawnZ would not be hidden behind an unpassed gate.
-  function trickleLane(spawnZ) {
-    let hidL = false, hidR = false;
-    const G = Ga.items, sh = C.GATE_SHADOW;
-    for (let i = 0; i < G.length; i++) {
-      const gt = G[i]; if (!gt.a || gt.passed) continue;
-      const d = spawnZ - gt.z;
-      if (d > sh[0] && d < sh[1]) { if (gt.lane !== 'R') hidL = true; if (gt.lane !== 'L') hidR = true; }
-    }
-    if (!hidL && !hidR) return Math.random() < 0.5 ? 'L' : 'R';
-    if (!hidL) return 'L';
-    if (!hidR) return 'R';
-    return null;
-  }
   function updatePlaying(dt) {
     game.time += dt;
     if (game.hintT > 0) game.hintT -= dt;
+    if (game.introT > 0) game.introT -= dt;
     const dxLane = I.consumeDX() * C.DRAG_SENS / cam.halfW;
     Q.update(dt, dxLane, I.keyDir());
     const segs = game.data.segs;
@@ -85,22 +74,18 @@
       game.trickleT -= dt;
       if (game.trickleT <= 0) {
         const sz = Q.z + C.SPAWN_AHEAD - 5;
-        const lane = trickleLane(sz);
-        if (!lane) game.trickleT = 0.8; // every lane shadowed by a gate right now: try again shortly
-        else {
-          game.trickleT = tr.every;
-          const type = (game.level >= 3 && Math.random() < 0.3) ? 'runner' : 'walker';
-          Zb.spawnPack(lane, sz, type, tr.count, game.data.hpMult);
-        }
+        game.trickleT = tr.every;
+        const type = tr.type || ((game.level >= 3 && Math.random() < 0.3) ? 'runner' : Math.random() < 0.3 ? 'crawler' : 'walker');
+        Zb.spawnPack(C.LANE_ROLE.enemy, sz, type, tr.count, game.data.hpMult);
       }
     }
     if (!game.bossSpawned && Q.z >= game.data.len - C.BOSS.spawnAhead) {
       game.bossSpawned = true;
       const bz = Q.z + C.BOSS.spawnAhead, hp = game.data.hpMult;
       Bo.spawn(game.data.boss.hp, game.data.boss.giant, bz, 0.5);
-      const mix = game.level >= 5 ? { runner: 0.3, brute: 0.2 } : null;
-      if (game.data.boss.giant) { Zb.spawnHorde(bz - 6, 24, hp, null, mix); Zb.spawnHorde(bz + 8, 24, hp, null, mix); }
-      else Zb.spawnHorde(bz - 4, 12, hp, null, mix);
+      const mix = game.level >= 5 ? { runner: 0.3, brute: 0.12, crawler: 0.2 } : { crawler: 0.3 };
+      if (game.data.boss.giant) { Zb.spawnHorde(bz - 6, 48, hp, null, mix, 'ALL'); Zb.spawnHorde(bz + 8, 48, hp, null, mix, 'ALL'); }
+      else Zb.spawnHorde(bz - 4, 30, hp, null, mix, 'ALL');
     }
     Ga.update(dt, Q); Ba.update(dt, Q); Zb.update(dt, Q); Bo.update(dt, Q); Bu.update(dt, Q.z); F.update(dt);
     if (Q.n <= 0) { game.state = 'dying'; game.endT = 1.1; A.lose(); F.flash('#ff2d2d', 0.55); F.shake(10); }
@@ -192,6 +177,15 @@
     S.drawText(g, C.WEAPONS[Q.weapon].name, cam.W - 72, 78, 14, '#ffe27a', '#3a2a00', 1, 'right');
     if (Q.drone) S.drawText(g, '+DRONE', cam.W - 72, 98, 12, '#6af0ff', '#103040', 1, 'right');
     if (Bo.active && !Bo.dying) Bo.drawBar(g, cam.W / 2, 66, 1.0);
+    if (game.introT > 0 && game.state === 'playing' && game.data) {
+      const t = Math.min(1, game.introT / 0.4, (2.4 - game.introT) / 0.25);
+      g.globalAlpha = Math.max(0, t);
+      g.fillStyle = 'rgba(8,12,24,0.55)'; g.fillRect(0, cam.H * 0.3 - 44, cam.W, game.data.modName ? 104 : 80);
+      S.drawText(g, game.data.title, cam.W / 2, cam.H * 0.3 - 10, 30, '#ffe27a', '#3a2a00');
+      S.drawText(g, 'LEVEL ' + game.level, cam.W / 2, cam.H * 0.3 + 22, 18, '#ffffff', '#102040');
+      if (game.data.modName) S.drawText(g, game.data.modName, cam.W / 2, cam.H * 0.3 + 46, 18, '#ff8a5a', '#3a0a00');
+      g.globalAlpha = 1;
+    }
     if (game.hintT > 0 && game.state === 'playing') {
       const t = Math.min(1, game.hintT / 0.5);
       g.globalAlpha = t;

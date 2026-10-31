@@ -60,3 +60,19 @@ State at handoff: steering AI wins all twelve levels (level 1 boss in about 11 s
 3. Visual polish beyond the current pass (outlined sprites, blood decals, debris, sun/clouds, gate glow, vignette): richer boss, muzzle smoke, a desert backdrop skin like the App Store creative, better roadside props.
 4. Boss damage pops aggregate over 120 ms and read "-3000"; the ads show "-80". Optional cosmetic cap.
 5. GitHub Pages for the installable version is pending Dr. Doxey's decision to merge into `main`.
+
+## Work in progress, 2026-10-31 (three-lane rework, not tuned, not published)
+
+Dr. Doxey asked for: bonuses, enemies and gates each in their own lane (per reference videos "Screen_Recording_20261031_0812xx_YouTube.mp4" to "..._081648_YouTube.mp4" in the mdoxey73 Google Drive, not yet viewed); more enemies with less health; static bonuses in the left lane; more level variety; better art.
+
+Committed so far (runs without errors, balance NOT tuned; the old steering AI is not lane-aware and loses level 1 at about 38 m):
+- `config.js`: three lanes (`LANES`, `LANE_X`, `LANE_ROLE`: supply L, enemy M, gate R); zombie HP cut to about a third (walker 9, runner 6, brute 70) plus a new `crawler` (hp 4); `MAX_ZOMBIES` 640; five `THEMES` (city, desert, night, snow, toxic). `GATE_SHADOW` removed.
+- `levels.js`: rewritten. All levels come from parameter rows through one generator that fills each lane as its own stream (gate runs with negatives in the breaks, packs/hordes/explosives in the enemy lane, stands in the supply lane). Each level has a theme (cycles by level) and a modifier (swarm, rush, siege, gauntlet, supply). New segment forms are documented at the top of the file. `L.stackedGates(lv)` replaces the old shadow check.
+- `zombies.js`: lane-based packs (rows of 4) and hordes (rows of 5, or `'ALL'` for boss escorts), mix fractions incl. crawler, a per-step depth index for bullet hit tests, three skins per type, white hit flash.
+- `gates.js`: gates span the gate lane; new drawing (gradient panel, chevron beam, pump progress bar).
+- `barrels.js`: supply stands are static plinths (no bob) with the reward mounted on top; explosives spawn at an x inside the enemy lane.
+- `main.js`: spawns by lane role; trickle is enemy-lane only; boss escorts span the road; level intro banner (theme title + modifier); contact multiplier now 1x, 2x from level 9.
+- `road.js` / `sprites.js`: three lanes with role tints and markings, themed palettes, backdrops and props (cactus, pine, lamp, rock), crawler and stand sprites, shaded soldier helmet, brute armor.
+- `squad.js`: squad starts in the middle lane.
+
+Next: view the videos and confirm lane order and enemy density; make `test/ai.js` lane-aware (use `CONFIG.LANE_X` / `LANE_ROLE`); tune levels 1-12; bump `sw.js` VERSION; rebuild single file; republish the artifact. Playwright browsers cannot be downloaded in the current cloud environment (PLAYWRIGHT_DOWNLOAD_HOST is blocked); a Node harness using @napi-rs/canvas in a scratch folder (not a repo dependency) ran levels headlessly and rendered screenshots.

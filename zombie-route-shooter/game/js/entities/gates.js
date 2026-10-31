@@ -1,5 +1,6 @@
-/* gates.js — numbered gates (+k, xk, -k, ÷k), one lane wide. Positive gates
-   absorb bullets and grow when shot. Crossing a gate applies its op to N. */
+/* gates.js — numbered gates (+k, xk, -k, ÷k), one lane wide, all in the gate
+   lane. Positive gates absorb bullets and grow when shot. Crossing a gate
+   applies its op to N. */
 (function () {
   const C = ZRS.CONFIG, cam = ZRS.cam, S = ZRS.sprites, F = ZRS.fx, A = ZRS.audio;
   const G = {};
@@ -13,8 +14,8 @@
   G.spawn = function (z, lane, op, value) {
     const gt = pool[next]; next = (next + 1) % pool.length;
     gt.a = true; gt.z = z; gt.lane = lane; gt.op = op; gt.value = value; gt.hits = 0; gt.need = C.GATE_SHOT_HITS; gt.ups = 0; gt.passed = false; gt.holes.length = 0; gt.flashT = 0;
-    gt.xmin = lane === 'L' ? -1 : lane === 'R' ? 0 : -1;
-    gt.xmax = lane === 'L' ? 0 : lane === 'R' ? 1 : 1;
+    const ln = C.LANES[lane] || C.LANES[C.LANE_ROLE.gate];
+    gt.xmin = ln.min; gt.xmax = ln.max;
     return gt;
   };
   G.isPositive = function (gt) { return gt.op === '+' || gt.op === 'x'; };
@@ -59,28 +60,48 @@
 
   G.drawOne = function (g, gt, squadZ) {
     const dz = gt.z - squadZ;
-    cam.project(dz, gt.xmin + 0.03, pa); cam.project(dz, gt.xmax - 0.03, pb);
-    const s = pa.s, h = C.GATE_H * s, y = pa.y;
-    const color = S.gateColor(gt.op);
-    const alpha = gt.passed ? 0.18 : 0.42;
-    g.globalAlpha = 0.14; g.fillStyle = color; g.fillRect(pa.x - 6 * s, y - h - 6 * s, pb.x - pa.x + 12 * s, h + 12 * s);
-    g.globalAlpha = alpha + (gt.flashT > 0 ? 0.3 : 0);
-    g.fillStyle = color; g.fillRect(pa.x, y - h, pb.x - pa.x, h);
-    g.globalAlpha = Math.min(1, alpha + 0.25); g.fillStyle = '#ffffff'; g.fillRect(pa.x, y - h, pb.x - pa.x, 3 * s);
-    g.globalAlpha = Math.min(1, alpha + 0.4);
-    g.strokeStyle = '#ffffff'; g.lineWidth = Math.max(1, 1.5 * s); g.strokeRect(pa.x, y - h, pb.x - pa.x, h);
-    g.globalAlpha = 1;
-    // posts
-    g.fillStyle = color; g.fillRect(pa.x - 3 * s, y - h - 6 * s, 5 * s, h + 8 * s); g.fillRect(pb.x - 2 * s, y - h - 6 * s, 5 * s, h + 8 * s);
-    g.fillStyle = '#ffffff'; g.fillRect(pa.x - 3 * s, y - h - 6 * s, 5 * s, 3 * s); g.fillRect(pb.x - 2 * s, y - h - 6 * s, 5 * s, 3 * s);
+    cam.project(dz, gt.xmin + 0.04, pa); cam.project(dz, gt.xmax - 0.04, pb);
+    const s = pa.s, h = C.GATE_H * s, y = pa.y, x0 = pa.x, x1 = pb.x, w = x1 - x0;
+    const color = S.gateColor(gt.op), good = G.isPositive(gt);
+    const fade = gt.passed ? 0.35 : 1;
+    // ground glow
+    g.globalAlpha = 0.22 * fade; g.fillStyle = color; S.ell(g, (x0 + x1) / 2, y, w * 0.6, 8 * s); g.fill();
+    // translucent panel with a vertical sheen
+    g.globalAlpha = (0.5 + (gt.flashT > 0 ? 0.3 : 0)) * fade;
+    g.drawImage(S.gatePanel(gt.op), x0, y - h, w, h);
+    g.globalAlpha = fade;
+    // frame + posts
+    g.strokeStyle = 'rgba(255,255,255,0.9)'; g.lineWidth = Math.max(1, 2 * s); g.strokeRect(x0, y - h, w, h);
+    g.fillStyle = S.gatePost(gt.op); g.fillRect(x0 - 4 * s, y - h - 8 * s, 7 * s, h + 8 * s); g.fillRect(x1 - 3 * s, y - h - 8 * s, 7 * s, h + 8 * s);
+    g.fillStyle = '#ffffff'; g.fillRect(x0 - 4 * s, y - h - 8 * s, 7 * s, 3 * s); g.fillRect(x1 - 3 * s, y - h - 8 * s, 7 * s, 3 * s);
+    // top beam with chevrons (up for good gates, down for bad)
+    g.fillStyle = color; g.fillRect(x0 - 4 * s, y - h - 14 * s, w + 8 * s, 8 * s);
+    if (s > 0.2) {
+      g.fillStyle = 'rgba(255,255,255,0.85)';
+      const n = Math.max(2, Math.round(w / (22 * s)));
+      for (let i = 0; i < n; i++) {
+        const cx = x0 + (i + 0.5) * w / n, cy = y - h - 10 * s;
+        g.beginPath();
+        if (good) { g.moveTo(cx - 4 * s, cy + 2.5 * s); g.lineTo(cx, cy - 2.5 * s); g.lineTo(cx + 4 * s, cy + 2.5 * s); }
+        else { g.moveTo(cx - 4 * s, cy - 2.5 * s); g.lineTo(cx, cy + 2.5 * s); g.lineTo(cx + 4 * s, cy - 2.5 * s); }
+        g.closePath(); g.fill();
+      }
+    }
     // bullet holes
     if (gt.holes.length && s > 0.15) {
-      const cx = (pa.x + pb.x) / 2, hw = (pb.x - pa.x) / 2;
+      const cx = (x0 + x1) / 2, hw = w / 2;
       g.fillStyle = 'rgba(20,20,30,0.7)';
       for (let i = 0; i < gt.holes.length; i++) { const ho = gt.holes[i]; S.circ(g, cx + ho.dx * hw * 0.9, y - h + ho.dy * h, 2.2 * s); g.fill(); }
     }
+    // pump progress bar on positive gates
+    if (good && !gt.passed && s > 0.18 && gt.value < (gt.op === '+' ? C.GATE_PLUS_CAP : C.GATE_MULT_CAP)) {
+      const bw = w * 0.7, bx = (x0 + x1) / 2 - bw / 2, by = y - 9 * s;
+      g.fillStyle = 'rgba(0,0,0,0.45)'; g.fillRect(bx, by, bw, 4 * s);
+      g.fillStyle = '#ffffff'; g.fillRect(bx, by, bw * Math.min(1, gt.hits / gt.need), 4 * s);
+    }
     // label
-    if (s > 0.06) S.drawText(g, S.gateLabel(gt.op, gt.value), (pa.x + pb.x) / 2, y - h * 0.5, 34, '#ffffff', '#102040', s * (gt.flashT > 0 ? 1.25 : 1));
+    if (s > 0.06) S.drawText(g, S.gateLabel(gt.op, gt.value), (x0 + x1) / 2, y - h * 0.52, 36, '#ffffff', good ? '#102040' : '#400a0a', s * (gt.flashT > 0 ? 1.25 : 1));
+    g.globalAlpha = 1;
   };
   ZRS.gates = G;
 })();

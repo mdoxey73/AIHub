@@ -1,10 +1,16 @@
-/* zombies.js — pooled zombies (walker, runner, brute) with HP numbers, bars,
-   damage pops, death splats and contact kills against the squad. */
+/* zombies.js — pooled zombies (crawler, walker, runner, brute) with HP numbers,
+   bars, damage pops, death splats and contact kills against the squad.
+   Packs and hordes spawn in the enemy lane; a per-step depth index keeps
+   bullet hit tests cheap with several hundred zombies on the road. */
 (function () {
   const C = ZRS.CONFIG, cam = ZRS.cam, S = ZRS.sprites, F = ZRS.fx, A = ZRS.audio;
   const Z = {};
   const pool = [];
-  for (let i = 0; i < C.MAX_ZOMBIES; i++) pool.push({ a: false, type: 'walker', z: 0, x: 0, hp: 1, maxHp: 1, speed: 1, w: 0.12, contactKills: 1, dead: false, deadT: 0, anim: 0, hitT: 0 });
+  for (let i = 0; i < C.MAX_ZOMBIES; i++) pool.push({ a: false, type: 'walker', z: 0, x: 0, hp: 1, maxHp: 1, speed: 1, w: 0.12, contactKills: 1, dead: false, deadT: 0, anim: 0, hitT: 0, skin: 0 });
+  // depth index: bins of 1 m starting at idxBase, rebuilt every step
+  const BINS = 240, bins = [];
+  for (let i = 0; i < BINS; i++) bins.push([]);
+  let idxBase = 0;
   let next = 0, alive = 0;
   Z.items = pool;
   const pa = {};
@@ -21,38 +27,62 @@
     zb.a = true; zb.type = type; zb.z = z; zb.x = Math.max(-0.95, Math.min(0.95, x));
     zb.hp = zb.maxHp = Math.max(1, Math.round(def.hp * (hpMult || 1)));
     zb.speed = def.speed * (0.9 + Math.random() * 0.2); zb.w = def.w; zb.contactKills = Math.round(def.contactKills * Z.contactMult);
-    zb.dead = false; zb.deadT = 0; zb.anim = Math.random() * 10; zb.hitT = 0;
+    zb.dead = false; zb.deadT = 0; zb.anim = Math.random() * 10; zb.hitT = 0; zb.skin = Math.floor(Math.random() * 3);
     alive++;
     return zb;
   };
-  Z.spawnPack = function (lane, z, type, count, hpMult) {
-    const cx = lane === 'L' ? -0.5 : lane === 'R' ? 0.5 : 0;
-    const cols = 4;
+  // lane: 'L' | 'M' | 'R' (one lane) or 'ALL' (the whole road)
+  function laneSpan(lane) {
+    if (lane === 'ALL') return { min: -0.95, max: 0.95 };
+    const ln = C.LANES[lane] || C.LANES[C.LANE_ROLE.enemy];
+    return { min: ln.min + 0.05, max: ln.max - 0.05 };
+  }
+  function pickType(type, mix) {
+    let t = type || 'walker';
+    if (mix) {
+      const r = Math.random(), b = mix.brute || 0, ru = b + (mix.runner || 0), cr = ru + (mix.crawler || 0);
+      if (r < b) t = 'brute'; else if (r < ru) t = 'runner'; else if (r < cr) t = 'crawler';
+    }
+    return t;
+  }
+  // A block of zombies `cols` wide, filling the lane span row by row.
+  function spawnBlock(lane, z, count, hpMult, type, mix, cols, rowDz) {
+    const sp = laneSpan(lane), w = sp.max - sp.min, dx = w / cols;
     for (let i = 0; i < count; i++) {
       const row = Math.floor(i / cols), col = i % cols;
-      const x = cx - 0.3 + col * 0.2 + (Math.random() - 0.5) * 0.08 + (row % 2) * 0.1;
-      Z.spawn(type, z + row * 1.3 + Math.random() * 0.4, x, hpMult);
+      const x = sp.min + dx * (col + 0.5 + (row % 2 ? 0.25 : -0.25)) + (Math.random() - 0.5) * dx * 0.35;
+      Z.spawn(pickType(type, mix), z + row * rowDz + Math.random() * 0.4, x, hpMult);
     }
-  };
-  // mix: { runner: 0.3, brute: 0.2 } fractions; the rest are walkers
-  Z.spawnHorde = function (z, count, hpMult, type, mix) {
-    const cols = 10;
-    for (let i = 0; i < count; i++) {
-      const row = Math.floor(i / cols), col = i % cols;
-      const x = -0.9 + col * 0.2 + (Math.random() - 0.5) * 0.08 + (row % 2) * 0.1;
-      let t = type || 'walker';
-      if (mix) { const r = Math.random(); if (r < (mix.brute || 0)) t = 'brute'; else if (r < (mix.brute || 0) + (mix.runner || 0)) t = 'runner'; }
-      Z.spawn(t, z + row * 1.2 + Math.random() * 0.5, x, hpMult);
-    }
+  }
+  Z.spawnPack = function (lane, z, type, count, hpMult) { spawnBlock(lane, z, count, hpMult, type, null, 4, 1.1); };
+  // mix: { crawler, runner, brute } fractions; the rest are `type` (walker by default)
+  Z.spawnHorde = function (z, count, hpMult, type, mix, lane) {
+    lane = lane || C.LANE_ROLE.enemy;
+    spawnBlock(lane, z, count, hpMult, type, mix, lane === 'ALL' ? 12 : 5, 1.0);
   };
 
-  Z.hitTest = function (prevZ, z, x) {
-    let best = null;
+  function buildIndex(squadZ) {
+    idxBase = Math.floor(squadZ) - 8;
+    for (let i = 0; i < BINS; i++) bins[i].length = 0;
     for (let i = 0; i < pool.length; i++) {
       const zb = pool[i]; if (!zb.a || zb.dead) continue;
-      if (zb.z + 0.35 < prevZ || zb.z - 0.35 > z) continue;
-      if (Math.abs(x - zb.x) > zb.w) continue;
-      if (!best || zb.z < best.z) best = zb;
+      let k = Math.floor(zb.z) - idxBase; if (k < 0) k = 0; else if (k >= BINS) k = BINS - 1;
+      bins[k].push(zb);
+    }
+  }
+  Z.hitTest = function (prevZ, z, x) {
+    let best = null;
+    let k0 = Math.floor(prevZ - 0.35) - idxBase, k1 = Math.floor(z + 0.35) - idxBase;
+    if (k1 < 0 || k0 >= BINS) return null;
+    if (k0 < 0) k0 = 0; if (k1 >= BINS) k1 = BINS - 1;
+    for (let k = k0; k <= k1; k++) {
+      const b = bins[k];
+      for (let i = 0; i < b.length; i++) {
+        const zb = b[i]; if (!zb.a || zb.dead) continue;
+        if (zb.z + 0.35 < prevZ || zb.z - 0.35 > z) continue;
+        if (Math.abs(x - zb.x) > zb.w) continue;
+        if (!best || zb.z < best.z) best = zb;
+      }
     }
     return best;
   };
@@ -67,7 +97,7 @@
     zb.hp = 0; zb.dead = true; zb.deadT = 0.55; alive--;
     cam.project(zb.z - squadZ, zb.x, pa);
     if (pa.s > 0.1) F.splat(pa.x, pa.y - 10 * pa.s, pa.s);
-    F.decal(zb.z, zb.x, zb.type === 'brute' ? 1.6 : 1);
+    F.decal(zb.z, zb.x, zb.type === 'brute' ? 1.6 : zb.type === 'crawler' ? 0.6 : 1);
     A.zombieDie();
   };
 
@@ -75,7 +105,7 @@
     for (let i = 0; i < pool.length; i++) {
       const zb = pool[i]; if (!zb.a) continue;
       if (zb.dead) { zb.deadT -= dt; if (zb.deadT <= 0 || zb.z - squad.z < -C.CULL_BEHIND) zb.a = false; continue; }
-      zb.anim += dt * (zb.type === 'runner' ? 12 : 5);
+      zb.anim += dt * (zb.type === 'runner' ? 12 : zb.type === 'crawler' ? 9 : 5);
       zb.z -= zb.speed * dt;
       if (zb.hitT > 0) zb.hitT -= dt;
       const dz = zb.z - squad.z;
@@ -90,6 +120,7 @@
       }
       if (dz < -C.CULL_BEHIND) { zb.a = false; alive--; }
     }
+    buildIndex(squad.z);
   };
 
   Z.drawOne = function (g, zb, squadZ) {
@@ -100,12 +131,13 @@
       const t = zb.deadT / 0.55;
       g.globalAlpha = t;
       g.save(); g.translate(pa.x, pa.y); g.scale(1.3, 0.35);
-      S.drawUnit(g, zb.type, 0, 0, 0, 0, s);
+      S.drawUnit(g, zb.type, zb.skin, 0, 0, 0, s);
       g.restore(); g.globalAlpha = 1;
       return;
     }
     const frame = Math.floor(zb.anim) % 2;
-    S.drawUnit(g, zb.type, 0, frame, pa.x, pa.y, zb.hitT > 0 ? s * 1.08 : s);
+    S.drawUnit(g, zb.type, zb.skin, frame, pa.x, pa.y, zb.hitT > 0 ? s * 1.08 : s);
+    if (zb.hitT > 0 && s > 0.1) { g.globalAlpha = 0.55; S.drawUnit(g, zb.type, 'hit', 0, pa.x, pa.y, s * 1.08); g.globalAlpha = 1; }
     if (s > 0.1) {
       const base = S.BASE[zb.type], h = base[1] * s, w = Math.max(14, base[0] * s);
       const by = pa.y - h - 8 * s;
