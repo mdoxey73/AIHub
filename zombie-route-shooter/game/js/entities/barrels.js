@@ -88,7 +88,7 @@
     const variant = b.kind === 'weapon' ? 'weapon' : b.bonus;
     S.drawUnit(g, 'stand', variant, 0, pa.x, pa.y, b.hitT > 0 ? sc * 1.05 : sc);
     const bodyH = S.BASE.stand[1] * sc;
-    if (s > 0.08) S.drawText(g, String(Math.ceil(b.hp)), pa.x, pa.y - bodyH * 0.42, 38, '#ffffff', '#1a1205', sc);
+    if (s > 0.08) S.drawText(g, String(Math.ceil(b.hp)), pa.x, pa.y - bodyH * 0.36, 40, '#ffffff', '#1a1205', sc);
     if (s <= 0.07) return;
     const top = pa.y - bodyH;
     if (b.kind === 'weapon') {

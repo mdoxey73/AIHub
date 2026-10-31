@@ -1,11 +1,13 @@
 /* bullets.js — pooled projectiles, hit resolution, aim assist and area damage.
    A bullet hits the nearest thing it crosses in its lane column: a positive
-   gate (absorbs and upgrades), a barrel, the boss, or a zombie. */
+   gate (absorbs and upgrades), a barrel, the boss, or a zombie. A bullet that
+   kills a zombie keeps flying with its leftover damage (up to BULLET_PIERCE
+   kills), so a stream of fire mows through a swarm of weak zombies. */
 (function () {
   const C = ZRS.CONFIG, cam = ZRS.cam, F = ZRS.fx, A = ZRS.audio;
   const B = {};
   const pool = [];
-  for (let i = 0; i < C.MAX_BULLETS; i++) pool.push({ a: false, z: 0, x: 0, prevZ: 0, vz: 0, dmg: 0, kind: 'tracer', color: '#fff', width: 2, range: 0, travel: 0, tx: NaN, aoe: 0, weapon: 'pistol' });
+  for (let i = 0; i < C.MAX_BULLETS; i++) pool.push({ a: false, z: 0, x: 0, prevZ: 0, vz: 0, dmg: 0, kind: 'tracer', color: '#fff', width: 2, range: 0, travel: 0, tx: NaN, aoe: 0, weapon: 'pistol', pierce: 0 });
   let next = 0, active = 0;
   const pa = {}, pb = {};
 
@@ -41,7 +43,7 @@
     if (!b.a) active++;
     b.a = true; b.z = z; b.prevZ = z; b.x = x; b.vz = w.speed; b.dmg = w.dmg * (dmgMult || 1);
     b.kind = w.kind; b.color = w.color; b.width = w.width; b.range = w.range; b.travel = 0;
-    b.tx = tx == null ? NaN : tx; b.aoe = w.aoe || 0; b.weapon = weaponKey;
+    b.tx = tx == null ? NaN : tx; b.aoe = w.aoe || 0; b.weapon = weaponKey; b.pierce = 0;
     return b;
   };
 
@@ -78,20 +80,29 @@
       // --- gates: upgrade on hit; absorb the bullet only if configured ---
       const gt = ZRS.gates.hitTest(b.prevZ, b.z, b.x);
       if (gt) { ZRS.gates.onShot(gt, b, squadZ); if (C.GATES_ABSORB_BULLETS) { free(b); continue; } }
-      // --- hit resolution: nearest object crossed in [prevZ, z] ---
-      let hitZ = Infinity, hitKind = 0, hitObj = null;
-      const br = ZRS.barrels.hitTest(b.prevZ, b.z, b.x);
-      if (br && br.z < hitZ) { hitZ = br.z; hitKind = 2; hitObj = br; }
-      const bo = ZRS.boss;
-      if (bo.hitTest(b.prevZ, b.z, b.x) && bo.z < hitZ) { hitZ = bo.z; hitKind = 3; hitObj = bo; }
-      const zb = ZRS.zombies.hitTest(b.prevZ, b.z, b.x);
-      if (zb && zb.z < hitZ) { hitZ = zb.z; hitKind = 4; hitObj = zb; }
-      if (!hitKind) continue;
-      if (b.kind === 'rocket') { B.explodeAt(hitZ, b.x, b.dmg, b.aoe, squadZ); free(b); continue; }
-      if (hitKind === 2) ZRS.barrels.damage(hitObj, b.dmg, b, squadZ);
-      else if (hitKind === 3) bo.damage(b.dmg, b, squadZ);
-      else ZRS.zombies.damage(hitObj, b.dmg, b, squadZ);
-      free(b);
+      // --- hit resolution: nearest object crossed in [from, z]; pierce through killed zombies ---
+      let from = b.prevZ;
+      while (b.a) {
+        let hitZ = Infinity, hitKind = 0, hitObj = null;
+        const br = ZRS.barrels.hitTest(from, b.z, b.x);
+        if (br && br.z < hitZ) { hitZ = br.z; hitKind = 2; hitObj = br; }
+        const bo = ZRS.boss;
+        if (bo.hitTest(from, b.z, b.x) && bo.z < hitZ) { hitZ = bo.z; hitKind = 3; hitObj = bo; }
+        const zb = ZRS.zombies.hitTest(from, b.z, b.x);
+        if (zb && zb.z < hitZ) { hitZ = zb.z; hitKind = 4; hitObj = zb; }
+        if (!hitKind) break;
+        // rockets plow through small zombies and burst on anything big (brute, boss, stand) or when spent
+        if (b.kind === 'rocket' && !(hitKind === 4 && hitObj.type !== 'brute')) { B.explodeAt(hitZ, b.x, b.dmg, b.aoe, squadZ); free(b); break; }
+        if (hitKind === 2) { ZRS.barrels.damage(hitObj, b.dmg, b, squadZ); free(b); break; }
+        if (hitKind === 3) { bo.damage(b.dmg, b, squadZ); free(b); break; }
+        const left = ZRS.zombies.damage(hitObj, b.dmg, b, squadZ);
+        b.pierce++;
+        if (left < 0.5 || b.pierce >= C.BULLET_PIERCE * (b.kind === 'rocket' ? 2 : 1)) {
+          if (b.kind === 'rocket') B.explodeAt(hitZ, b.x, Math.max(left, b.dmg * 0.5), b.aoe, squadZ);
+          free(b); break;
+        }
+        b.dmg = left; from = hitZ;
+      }
     }
   };
 

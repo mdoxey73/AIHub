@@ -2,7 +2,7 @@ const { chromium } = require('playwright');
 const path = require('path');
 const GAME = 'file://' + path.resolve(__dirname, '..', 'index.html');
 (async () => {
-  const browser = await chromium.launch();
+  const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || undefined });
   // iPhone-sized viewport, touch, DPR 2
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true });
   const page = await ctx.newPage();

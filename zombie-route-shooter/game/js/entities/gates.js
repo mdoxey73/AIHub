@@ -1,18 +1,21 @@
 /* gates.js — numbered gates (+k, xk, -k, ÷k), one lane wide, all in the gate
    lane. Positive gates absorb bullets and grow when shot. Crossing a gate
-   applies its op to N. */
+   applies its op to N. Tiles are a second, low form: long runs of +1 (or +2)
+   blocks packed close together in the gate lane; each one run through adds
+   its value. Tiles are not shot (bullets fly over them). */
 (function () {
   const C = ZRS.CONFIG, cam = ZRS.cam, S = ZRS.sprites, F = ZRS.fx, A = ZRS.audio;
   const G = {};
   const pool = [];
-  for (let i = 0; i < C.MAX_GATES; i++) pool.push({ a: false, z: 0, lane: 'L', xmin: 0, xmax: 0, op: '+', value: 1, hits: 0, need: 10, ups: 0, passed: false, holes: [], flashT: 0 });
+  for (let i = 0; i < C.MAX_GATES; i++) pool.push({ a: false, z: 0, lane: 'L', xmin: 0, xmax: 0, op: '+', value: 1, hits: 0, need: 10, ups: 0, passed: false, holes: [], flashT: 0, tile: false, popT: 0 });
   let next = 0;
   G.items = pool;
   const pa = {}, pb = {};
 
   G.reset = function () { pool.forEach(x => { x.a = false; x.holes.length = 0; }); };
-  G.spawn = function (z, lane, op, value) {
+  G.spawn = function (z, lane, op, value, tile) {
     const gt = pool[next]; next = (next + 1) % pool.length;
+    gt.tile = !!tile; gt.popT = 0;
     gt.a = true; gt.z = z; gt.lane = lane; gt.op = op; gt.value = value; gt.hits = 0; gt.need = C.GATE_SHOT_HITS; gt.ups = 0; gt.passed = false; gt.holes.length = 0; gt.flashT = 0;
     const ln = C.LANES[lane] || C.LANES[C.LANE_ROLE.gate];
     gt.xmin = ln.min; gt.xmax = ln.max;
@@ -23,7 +26,7 @@
   G.hitTest = function (prevZ, z, x) {
     let best = null;
     for (let i = 0; i < pool.length; i++) {
-      const gt = pool[i]; if (!gt.a || gt.passed || !G.isPositive(gt)) continue;
+      const gt = pool[i]; if (!gt.a || gt.passed || gt.tile || !G.isPositive(gt)) continue;
       if (gt.z < prevZ || gt.z > z) continue;
       if (x < gt.xmin || x > gt.xmax) continue;
       if (!best || gt.z < best.z) best = gt;
@@ -41,13 +44,23 @@
     }
   };
 
+  let tileSfxT = 0;
   G.update = function (dt, squad) {
+    if (tileSfxT > 0) tileSfxT -= dt;
     for (let i = 0; i < pool.length; i++) {
       const gt = pool[i]; if (!gt.a) continue;
       if (gt.flashT > 0) gt.flashT -= dt;
+      if (gt.popT > 0) gt.popT -= dt;
       if (!gt.passed && squad.prevZ < gt.z && squad.z >= gt.z) {
         gt.passed = true;
-        if (squad.x >= gt.xmin && squad.x <= gt.xmax) {
+        if (gt.tile) {
+          if (squad.x >= gt.xmin - 0.04 && squad.x <= gt.xmax + 0.04) {
+            squad.applyGate(gt.op, gt.value); gt.popT = 0.3;
+            cam.project(gt.z - squad.z, (gt.xmin + gt.xmax) / 2, pa);
+            F.sparkle(pa.x, pa.y - 20, 0.5, '#7ab8ff');
+            if (tileSfxT <= 0) { A.gateUp(); tileSfxT = 0.12; }
+          }
+        } else if (squad.x >= gt.xmin && squad.x <= gt.xmax) {
           const delta = squad.applyGate(gt.op, gt.value);
           cam.project(gt.z - squad.z, (gt.xmin + gt.xmax) / 2, pa);
           if (delta >= 0) { F.sparkle(pa.x, pa.y - 30, 1, gt.op === 'x' ? '#ffd24a' : '#7ab8ff'); F.flash(gt.op === 'x' ? '#ffd24a' : '#7ab8ff', 0.18); A.gateUp(); }
@@ -58,8 +71,27 @@
     }
   };
 
+  // A tile: a low glowing block with its value on the front face.
+  function drawTile(g, gt, dz) {
+    if (gt.passed && gt.popT <= 0) return;
+    cam.project(dz, gt.xmin + 0.05, pa); cam.project(dz, gt.xmax - 0.05, pb);
+    const s = pa.s, x0 = pa.x, x1 = pb.x, w = x1 - x0, y = pa.y;
+    const h = C.TILE_H * s, depth = 7 * s;
+    const pop = gt.passed ? gt.popT / 0.3 : 1;
+    g.globalAlpha = pop;
+    const lift = gt.passed ? (1 - pop) * 24 * s : 0;
+    const neg = gt.op === '-' || gt.op === '/';
+    // top face, front face, rim
+    g.fillStyle = neg ? '#ff8a8a' : '#a9d4ff'; g.fillRect(x0 + 2 * s, y - h - depth - lift, w - 4 * s, depth);
+    g.drawImage(S.tileFace(neg), x0, y - h - lift, w, h);
+    g.strokeStyle = 'rgba(255,255,255,0.85)'; g.lineWidth = Math.max(1, 1.5 * s); g.strokeRect(x0, y - h - lift, w, h);
+    if (s > 0.09) S.drawText(g, S.gateLabel(gt.op, gt.value), (x0 + x1) / 2, y - h * 0.5 - lift, 24, '#ffffff', neg ? '#400a0a' : '#0c2a5a', s);
+    g.globalAlpha = 1;
+  }
+
   G.drawOne = function (g, gt, squadZ) {
     const dz = gt.z - squadZ;
+    if (gt.tile) { drawTile(g, gt, dz); return; }
     cam.project(dz, gt.xmin + 0.04, pa); cam.project(dz, gt.xmax - 0.04, pb);
     const s = pa.s, h = C.GATE_H * s, y = pa.y, x0 = pa.x, x1 = pb.x, w = x1 - x0;
     const color = S.gateColor(gt.op), good = G.isPositive(gt);

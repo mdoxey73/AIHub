@@ -2,7 +2,7 @@ const { chromium } = require('playwright');
 const path = require('path');
 const GAME = 'file://' + path.resolve(__dirname, '..', 'index.html');
 (async () => {
-  const browser = await chromium.launch();
+  const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || undefined });
   for (const level of [1, 3, 6]) {
     const ctx = await browser.newContext({ viewport: { width: 540, height: 960 } });
     const page = await ctx.newPage();

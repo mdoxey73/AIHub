@@ -22,12 +22,14 @@ Service workers need HTTPS or `localhost`, so a plain `http://192.168.x.x:8000` 
 
 ## How it plays
 
-- The squad auto-runs up a two-lane highway and fires straight ahead. Its count is the resource.
-- **Gates** (`+k`, `xk`, `-k`, `÷k`) apply to the count when the squad's center crosses them. Positive gates grow when shot (first upgrade after 8 hits, each further one needs 6 more); bullets pass through gates, so zombies behind them are fair game. Chains are spaced 7 m apart.
-- **Barrels** show their HP as a number and must be shot to zero. Weapon barrels (minigun, shotgun, RPG, drone, armored vehicle) hand the squad that weapon. Bonus barrels give `+N` soldiers, `RATE+` (+20% fire rate, up to 2x) or `DMG+` (+20% damage, up to 2x). Explosive barrels blow up in an area and chain; running into one alive costs soldiers.
-- **Zombies**: walkers, runners (fast, from level 3) and brutes (tanky, kill 6 on contact, from level 5). Packs, hordes of up to 64, and a steady trickle of small packs so the road is never empty. Each zombie that reaches the squad takes soldiers with it.
+- The squad auto-runs up a three-lane road and fires straight ahead. Its count is the resource. Low divider walls split the road, and each lane has one job:
+  - **Left: supply lane.** Static crate stands (they never move or roll) with an HP number on the front and the reward mounted on top. Shoot one to zero to collect it: a weapon (minigun, shotgun, RPG, drone, armored vehicle) or a bonus (`+N` soldiers, `RATE+` +20% fire rate up to 2x, `DMG+` +20% damage up to 2x). Running into an unbroken stand shoves it aside with no reward.
+  - **Middle: enemy lane.** Packs and hordes of many weak zombies, with one shared count floating over each group, plus explosive barrels. Zombies stay in their lane until they are close, then spill out toward the squad. A bullet that kills a zombie keeps flying with its leftover damage (up to six kills), so sustained fire mows through a swarm.
+  - **Right: gate lane.** Long runs of low `+1` tiles (each one run through adds its value; `+2` from level 8), each run capped by a big gate: `x2` (sometimes `x3` late) or a `+k` gate that grows when shot. Some breaks hold a negative gate or a short run of red tiles to step around.
+- Zombies: crawlers, walkers, runners and brutes (brutes are tanky and show an HP bar). Every zombie that reaches the squad takes a soldier with it (two from level 9; brutes take more).
 - **Boss** at the end of every level; Giants on 5, 10, 15 with escort hordes. Kill it before it reaches you.
-- The count is capped at 9999, like the ads. Fire power stops scaling past about 700 soldiers, so bosses are a real fight.
+- **Level variety**: six themes cycle by level (city ring road, desert highway, river bridge, night boulevard, snow pass, toxic spill zone), and each level has a modifier: swarm (crawler-heavy), runner rush, siege (brutes), gate gauntlet (more negatives), supply run (extra stands) or flood (one huge horde mid-level).
+- The count is capped at 9999, like the ads. Fire power grows more slowly past 64 soldiers, so bosses are a real fight.
 
 ## Controls
 
@@ -50,16 +52,16 @@ css/style.css
 js/config.js          every tunable constant: speeds, caps, weapons, zombie and boss stats, colors
 js/render/camera.js   pseudo-3D projection (road distance + lane position -> screen x, y, scale)
 js/render/sprites.js  code-drawn units, icons, gates, backdrop; sprite and text caches
-js/render/road.js     scrolling highway, median, barriers, hazard stripes, posts, roadside props
+js/render/road.js     scrolling road, lane divider walls, barriers, hazard stripes, posts, themed props
 js/audio.js           WebAudio-synthesized sound effects
 js/fx.js              particles, floating numbers, screen shake, flash, hit-stop, banners
 js/entities/bullets.js  projectiles, hit resolution, aim assist, area damage
-js/entities/gates.js    +k / xk / -k / ÷k gates, chains, shoot-to-upgrade
-js/entities/barrels.js  numbered weapon barrels and explosive barrels
-js/entities/zombies.js  walker / runner / brute, HP bars and numbers, contact kills
+js/entities/gates.js    +k / xk / -k / ÷k gates, +1 tile runs, shoot-to-upgrade
+js/entities/barrels.js  static supply stands (weapons, bonuses) and explosive barrels
+js/entities/zombies.js  crawler / walker / runner / brute, group counts, contact kills
 js/entities/boss.js     end-of-level boss, skull HP bar, burn, giant variant
 js/entities/squad.js    squad count, formation, drag steering, weapons, drone, vehicle
-js/levels.js          levels 1-3 hand-laid; 4-12 from hand-tuned parameter rows; 13+ scaled
+js/levels.js          every level from a parameter row through one lane-by-lane generator; 13+ scaled
 js/save.js            localStorage
 js/input.js           pointer drag, taps, keyboard
 js/main.js            fixed-step loop, level flow, HUD, title / win / lose screens
@@ -72,4 +74,4 @@ dist/                 the single-file build
 
 ## Tuning
 
-Start in `js/config.js`. Squad speed, perspective (`NEAR`), formation spacing, gate upgrade pacing, weapon damage and fire rates, zombie HP and speed, boss speed and contact damage, pool caps and shake magnitudes are all there. Level layouts and boss HP are in `js/levels.js`: edit the segment lists for levels 1-3 directly, or the parameter rows for 4-12.
+Start in `js/config.js`. Squad speed, perspective (`NEAR`), formation spacing, gate upgrade pacing, weapon damage and fire rates, zombie HP and speed, boss speed and contact damage, pool caps and shake magnitudes are all there. Level layouts and boss HP are in `js/levels.js`: edit the parameter rows for 1-12 (tile runs: `tileMin`, `tileMax`, `tileVal`; zombies: `pack`, `horde`; stands; modifier).

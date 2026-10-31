@@ -54,18 +54,26 @@ ZRS.CONFIG = {
   GATES_ABSORB_BULLETS: true, // classic: shooting a gate pumps it and stops the bullet (pumping costs fire)
   GATE_CHAIN_SPACING: 12,   // meters between gates in a chain (never stacked)
   GATE_H: 84,               // gate height in px at scale 1
+  TILE_SPACING: 1.7,        // meters between +1 tiles in a tile run (tiles are low blocks, run through, never shot)
+  TILE_H: 26,               // tile height in px at scale 1
+  DIVIDER_ON: 22,           // lane-divider wall segments: meters of wall, then
+  DIVIDER_OFF: 5,           // meters of gap
   SPAWN_AHEAD: 95,          // meters ahead at which track segments spawn
 
   // ---- Zombies (hp is multiplied by the level's hpMult) ----
   ZOMBIE: {
     // many weak zombies: a walker falls to one or two pistol rounds at the level's hpMult
-    crawler: { hp: 4,   speed: 1.8, contactKills: 1, w: 0.08, size: 0.75 },
-    walker:  { hp: 9,   speed: 2.3, contactKills: 1, w: 0.09, size: 1.0 },
-    runner:  { hp: 6,   speed: 5.0, contactKills: 1, w: 0.08, size: 0.9 },
-    brute:   { hp: 70,  speed: 1.5, contactKills: 4, w: 0.15, size: 1.5 },
+    // swarms of weak zombies: one bullet usually kills several of them (see BULLET_PIERCE).
+    // size scales the sprite; w is the lateral hit half width.
+    crawler: { hp: 3,   speed: 1.9, contactKills: 1, w: 0.07, size: 0.8 },
+    walker:  { hp: 5,   speed: 2.3, contactKills: 1, w: 0.07, size: 0.82 },
+    runner:  { hp: 4,   speed: 4.6, contactKills: 1, w: 0.07, size: 0.78 },
+    brute:   { hp: 60,  speed: 1.5, contactKills: 4, w: 0.13, size: 1.1 },
   },
-  ZOMBIE_HOMING: 0.32,      // lateral drift toward the squad (lane units/s) when close
-  ZOMBIE_HOMING_RANGE: 22,  // meters
+  ZOMBIE_HOMING: 0.42,      // lateral drift toward the squad (lane units/s) once close: the horde spills out of its lane
+  ZOMBIE_HOMING_RANGE: 13,  // meters; farther away, zombies stay inside the enemy lane
+  BULLET_PIERCE: 6,         // a bullet that kills a zombie keeps going with its leftover damage, up to this many kills
+  GROUP_LABEL_MIN: 10,       // packs and hordes with at least this many zombies show one shared count
 
   // ---- Barrels ----
   EXPLOSION_DAMAGE: 160,
@@ -95,7 +103,7 @@ ZRS.CONFIG = {
     rifle:   { name: 'RIFLE',   dmg: 20,  rate: 3.0, speed: 52, range: 65, kind: 'tracer', color: '#ffc966', width: 2 },
     shotgun: { name: 'SHOTGUN', dmg: 10,  rate: 1.5, speed: 40, range: 30, kind: 'pellet', color: '#ffd27a', width: 2, pellets: 5, spread: 0.14 },
     minigun: { name: 'MINIGUN', dmg: 12,  rate: 6.0, speed: 55, range: 55, kind: 'tracer', color: '#ff9a2e', width: 3 },
-    rpg:     { name: 'RPG',     dmg: 150, rate: 0.6, speed: 26, range: 80, kind: 'rocket', color: '#ff6a2e', width: 5, aoe: 2.5 },
+    rpg:     { name: 'RPG',     dmg: 150, rate: 0.8, speed: 26, range: 80, kind: 'rocket', color: '#ff6a2e', width: 5, aoe: 2.5 },
     drone:   { name: 'DRONE',   dmg: 30,  rate: 4.0, speed: 70, range: 70, kind: 'laser',  color: '#6af0ff', width: 2 },
   },
   WEAPON_ORDER: ['pistol', 'rifle', 'shotgun', 'minigun', 'rpg'],
@@ -108,11 +116,11 @@ ZRS.CONFIG = {
   },
 
   // ---- Pools / caps ----
-  MAX_ZOMBIES: 640,
+  MAX_ZOMBIES: 900,
   MAX_BULLETS: 600,
   MAX_PARTICLES: 300,
   MAX_FLOATERS: 60,
-  MAX_GATES: 48,
+  MAX_GATES: 160,
   MAX_BARRELS: 32,
   MAX_DECALS: 120,
 
@@ -130,6 +138,7 @@ ZRS.CONFIG = {
     desert: { sky1: '#e9a25a', sky2: '#fbe2b2', ground: '#c99a5c', asphalt: '#5b5048', asphaltFar: '#7e6f60', asphaltNear: '#51473f', barrier: '#cdb38a', barrierDark: '#a88f68', haze: '251,226,178', led: '#ffb347', lane: '#f3e6c8', skyline: '#a0623a', hills: '#c98d5a', sun: '255,236,180', props: ['cactus', 'wreck', 'sign', 'rock', 'cactus', 'truck'] },
     night:  { sky1: '#070c22', sky2: '#27325e', ground: '#24252c', asphalt: '#26272e', asphaltFar: '#33364a', asphaltNear: '#1f2026', barrier: '#5a5d70', barrierDark: '#3d4050', haze: '39,50,94', led: '#ff4fd8', lane: '#c9c9d9', skyline: '#141a33', hills: '#1d2547', sun: '220,230,255', props: ['lamp', 'wreck', 'sign', 'lamp', 'truck', 'chimney'], night: true },
     snow:   { sky1: '#9db9cf', sky2: '#eef3f7', ground: '#e6edf2', asphalt: '#555a63', asphaltFar: '#7d838d', asphaltNear: '#4b5058', barrier: '#cdd7df', barrierDark: '#a4afb9', haze: '238,243,247', led: '#7ae0ff', lane: '#ffffff', skyline: '#7f93a6', hills: '#c7d6e2', sun: '255,255,240', props: ['pine', 'pine', 'sign', 'truck', 'pine', 'rock'], snow: true },
+    bridge: { sky1: '#7fa9c9', sky2: '#e4ecef', ground: '#3d6f8c', asphalt: '#575a61', asphaltFar: '#777b84', asphaltNear: '#4d5057', barrier: '#b45a3c', barrierDark: '#8a4129', haze: '228,236,239', led: '#ffd27a', lane: '#ececec', skyline: '#6c7d8c', hills: '#9db4c4', sun: '255,246,214', props: ['girder', 'girder', 'girder', 'lamp', 'girder', 'girder'], water: true },
     toxic:  { sky1: '#6f7a3e', sky2: '#c9d199', ground: '#4e573a', asphalt: '#3e4339', asphaltFar: '#5d6352', asphaltNear: '#373b32', barrier: '#8b9270', barrierDark: '#666c50', haze: '201,209,153', led: '#9dff4f', lane: '#e6eccc', skyline: '#3f4a2c', hills: '#7c8a52', sun: '230,255,170', props: ['chimney', 'silo', 'sign', 'wreck', 'chimney', 'rock'] },
   },
 

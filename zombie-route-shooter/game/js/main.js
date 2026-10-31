@@ -52,7 +52,7 @@
   function spawnSeg(s) {
     const hp = game.data.hpMult, LR = C.LANE_ROLE;
     switch (s[0]) {
-      case 'gate': Ga.spawn(s[1], LR.gate, s[2], s[3]); break;
+      case 'gate': Ga.spawn(s[1], LR.gate, s[2], s[3], !!s[4]); break;
       case 'pack': Zb.spawnPack(LR.enemy, s[1], s[2], s[3], hp); break;
       case 'horde': Zb.spawnHorde(s[1], s[2], hp, 'walker', s[3]); break;
       case 'explosive': { const ln = C.LANES[LR.enemy]; Ba.spawn(s[1], LR.enemy, 'explosive', s[2], null, 0, ln.min + 0.12 + Math.random() * (ln.max - ln.min - 0.24)); break; }
@@ -70,7 +70,7 @@
     while (game.segIdx < segs.length && segs[game.segIdx][1] <= Q.z + C.SPAWN_AHEAD) { spawnSeg(segs[game.segIdx]); game.segIdx++; }
     // steady trickle of small packs so the road is never empty
     const tr = game.data.trickle;
-    if (tr && Q.z >= tr.from) {
+    if (tr && Q.z >= tr.from && !game.bossSpawned) {
       game.trickleT -= dt;
       if (game.trickleT <= 0) {
         const sz = Q.z + C.SPAWN_AHEAD - 5;
@@ -154,6 +154,7 @@
         case 6: Q.drawVehicle(g); break;
       }
     }
+    Zb.drawGroupLabels(g, sz);
     Bu.draw(g, sz);
     F.drawParticles(g);
     if (game.state === 'playing' || game.state === 'winning') Q.drawLabel(g);

@@ -146,6 +146,27 @@ Feedback after playing the first build: gate increases felt capped; gates stacke
 
 **Still open.** The AI is crude (ignores barrels unless close, does not weigh absorbing gates), so the "winnable" verdicts are a floor; a human tuning pass is the next step. Real-device profiling still not done. Boss pops read "-3000" rather than the ads' "-80".
 
+### 2026-10-31 — third pass: three lanes, swarms, tiles (from Dr. Doxey's reference videos)
+
+Dr. Doxey asked for bonuses, enemies and gates in separate lanes, more enemies with less health, static (not rolling) bonuses on the left, more level variety, and better art, with five screen recordings of ads in their Google Drive as the reference. The recordings were watched frame by frame in Dr. Doxey's own Chrome (Drive viewer, read only); they are used for mechanics, layout and pacing only, and no art, characters, names or UI were copied.
+
+**What the videos showed.** Left lane: one large static bonus object with a big HP number that is shot down while running past. Middle lane: hundreds of tiny enemies in a dense block with a single shared counter. Right lane: a walled lane of long runs of consecutive `+1` tiles that add as you cross them. The lanes are split by low walls.
+
+**Changes.**
+- Three lanes with fixed roles (supply L, enemy M, gate R), divided by low walls with colored rails (`road.js`).
+- Enemies: HP cut sharply (crawler 3, walker 5, runner 4, brute 60) and much larger groups (packs in rows of 6, hordes in rows of 7, 16 across for boss escorts); packs of 10+ show one shared count chip. `MAX_ZOMBIES` 900.
+- Bullets pierce: a kill passes leftover damage on, up to 6 zombies per bullet; rockets plow through small zombies. Without piercing the swarms were unwinnable.
+- Gate lane: runs of `+1` tiles (5 to 21 long, `+2` from level 8) capped by a pumpable big gate; multipliers rarer (`x2` every few runs, `x3` only from level 6 late); negatives as red tiles or a `÷`/`-` gate.
+- Supply stands: static crate stacks with a colored band by reward and a large HP number.
+- Variety: a sixth theme, Rust River Bridge (water, girders, towers and cables), and a FLOOD modifier (one huge horde past halfway, level 7). Six themes cycle by level.
+- Art: zombie shading, torn clothing, glowing eyes, size scaling by type; tile blocks with pop-up on pass; crate stands; bridge backdrop.
+- Boss fights: the trickle stops when the boss spawns; RPG rate 0.8; boss HP retuned (level 1 70,000 to level 12 850,000; Giants 260,000 and 700,000).
+- Tests: `test/ai.js` rewritten lane-aware; all tests accept `CHROME_PATH` for a scratch Chrome for Testing build.
+
+**Calibration.** Before tuning, squads grew into the thousands from multiplier chains and levels 5, 7 and 10 were lost at the boss. After making multipliers rarer, lowering the HP multipliers per level, stopping the trickle at the boss and letting rockets pierce: AI wins all twelve levels (N at boss 245 to 5,989; boss kill 11 to 24 s; peak 129 to 530 zombies on screen); no-steering loses levels 1, 3 and 6; 0 stacked gates across 1 to 14.
+
+**Still open.** Hands-on feel test, real-phone frame rate with 500 zombies on screen.
+
 ## 9. Sources
 
 - [Z Route: Redemption on Google Play](https://play.google.com/store/apps/details?id=com.zroute.global&hl=en_US) — screenshots and reviews

@@ -75,9 +75,9 @@
   // Base sizes at scale 1; sprites are anchored at bottom-center.
   const BASE = {
     soldier: [28, 46], walker: [28, 44], runner: [24, 40], brute: [44, 66], crawler: [30, 22],
-    boss: [130, 170], barrel: [60, 64], crate: [72, 70], stand: [76, 58], drone: [48, 28], vehicle: [120, 64],
+    boss: [130, 170], barrel: [60, 64], crate: [72, 70], stand: [90, 72], drone: [48, 28], vehicle: [120, 64],
     sign: [70, 92], truck: [110, 62], silo: [84, 124], chimney: [44, 156], wreck: [100, 52], tankprop: [100, 52],
-    cactus: [50, 96], pine: [70, 130], lamp: [60, 150], rock: [80, 46],
+    cactus: [50, 96], pine: [70, 130], lamp: [60, 150], rock: [80, 46], girder: [64, 170],
   };
   S.BASE = BASE;
 
@@ -126,10 +126,17 @@
     g.fillStyle = shirt; g.fillRect(1 + lean, 18, 5, 12); g.fillRect(22 + lean, 18, 5, 12);
     g.fillStyle = skin; g.fillRect(1 + lean, 29, 5, 4); g.fillRect(22 + lean, 29, 5, 4);
     g.fillStyle = shirt; rr(g, 6, 16, 16, 15, 3); g.fill();
-    g.fillStyle = 'rgba(0,0,0,0.25)'; g.fillRect(9, 22, 2, 7); g.fillRect(17, 19, 2, 9);
-    g.fillStyle = '#7a1414'; g.fillRect(12, 24, 5, 4);
+    // torn hem, side shading, blood
+    g.fillStyle = '#4a4552'; g.beginPath(); g.moveTo(6, 31); g.lineTo(9, 27); g.lineTo(12, 31); g.lineTo(15, 28); g.lineTo(18, 31); g.lineTo(22, 27); g.lineTo(22, 31); g.closePath(); g.fill();
+    g.fillStyle = 'rgba(0,0,0,0.28)'; g.fillRect(17, 16, 5, 13);
+    g.fillStyle = 'rgba(255,255,255,0.14)'; g.fillRect(7, 17, 3, 10);
+    g.fillStyle = '#7a1414'; g.fillRect(12, 24, 5, 4); g.fillRect(9, 19, 2, 3);
     g.fillStyle = skin; circ(g, 14 + lean, 11, 6); g.fill();
-    g.fillStyle = '#141414'; circ(g, 11.5 + lean, 10, 1.3); g.fill(); circ(g, 16.5 + lean, 10, 1.3); g.fill();
+    g.fillStyle = 'rgba(0,0,0,0.22)'; circ(g, 15.5 + lean, 12.5, 4.2); g.fill();
+    g.fillStyle = 'rgba(40,30,30,0.7)'; g.beginPath(); g.arc(14 + lean, 10, 6.2, Math.PI * 1.05, Math.PI * 1.95); g.closePath(); g.fill();
+    // glowing eyes read even in a dense swarm
+    g.fillStyle = 'rgba(230,255,120,0.35)'; circ(g, 11.5 + lean, 10.5, 2.4); g.fill(); circ(g, 16.5 + lean, 10.5, 2.4); g.fill();
+    g.fillStyle = '#eaff7a'; circ(g, 11.5 + lean, 10.5, 1.2); g.fill(); circ(g, 16.5 + lean, 10.5, 1.2); g.fill();
     g.fillStyle = '#3a1010'; g.fillRect(11 + lean, 14, 6, 2);
     g.fillStyle = '#8b1a1a'; g.fillRect(16 + lean, 12, 4, 3);
   }
@@ -161,7 +168,8 @@
     g.fillStyle = sh; rr(g, 4, 7, 22, 9, 4); g.fill();
     g.fillStyle = 'rgba(0,0,0,0.25)'; g.fillRect(9, 9, 2, 6); g.fillRect(17, 8, 2, 6);
     g.fillStyle = sk; circ(g, 15, 7, 5); g.fill();
-    g.fillStyle = '#141414'; circ(g, 13, 6.5, 1.1); g.fill(); circ(g, 17, 6.5, 1.1); g.fill();
+    g.fillStyle = 'rgba(230,255,120,0.35)'; circ(g, 13, 6.5, 2); g.fill(); circ(g, 17, 6.5, 2); g.fill();
+    g.fillStyle = '#eaff7a'; circ(g, 13, 6.5, 1); g.fill(); circ(g, 17, 6.5, 1); g.fill();
     g.fillStyle = '#7a1414'; g.fillRect(13, 9, 4, 1.6);
   };
 
@@ -239,21 +247,39 @@
     g.fillStyle = '#333'; g.fillRect(58, 0, 5, 16);
     g.fillStyle = '#5f7f48'; g.fillRect(14, 32, 92, 4);
   };
-  // supply stand: steel plinth with a lit top and a colored band by reward type
+  // supply stand: a static stack of military crates with a colored band by reward type
+  // (the reward itself is drawn on top by barrels.js, the HP number on the front crate)
   drawers.stand = function (g, variant) {
     const band = variant === 'weapon' ? '#39c95a' : variant === 'squad' ? '#2f7cff' : variant === 'rate' ? '#e0a400' : '#e0562a';
-    g.fillStyle = 'rgba(0,0,0,0.38)'; ell(g, 38, 55, 34, 5); g.fill();
-    const gr = g.createLinearGradient(6, 0, 70, 0);
-    gr.addColorStop(0, '#3e434d'); gr.addColorStop(0.45, '#6b7280'); gr.addColorStop(1, '#353941');
-    g.fillStyle = gr; rr(g, 8, 14, 60, 40, 5); g.fill();
-    g.fillStyle = band; g.fillRect(8, 44, 60, 6);
-    g.fillStyle = 'rgba(255,255,255,0.12)'; g.fillRect(8, 14, 60, 4);
-    g.fillStyle = '#23262c'; g.fillRect(8, 50, 60, 4);
-    // lit top
-    g.fillStyle = '#8b93a0'; ell(g, 38, 14, 30, 7); g.fill();
-    g.fillStyle = band; g.globalAlpha = 0.55; ell(g, 38, 13, 22, 4.5); g.fill(); g.globalAlpha = 1;
-    // corner bolts
-    g.fillStyle = '#9aa2ae'; [[13, 22], [63, 22], [13, 40], [63, 40]].forEach(p => { circ(g, p[0], p[1], 1.6); g.fill(); });
+    g.fillStyle = 'rgba(0,0,0,0.4)'; ell(g, 45, 69, 42, 6); g.fill();
+    function crate(x, y, w, h, light, dark) {
+      const gr = g.createLinearGradient(x, 0, x + w, 0);
+      gr.addColorStop(0, dark); gr.addColorStop(0.4, light); gr.addColorStop(1, dark);
+      g.fillStyle = gr; rr(g, x, y, w, h, 3); g.fill();
+      g.strokeStyle = 'rgba(0,0,0,0.45)'; g.lineWidth = 1.2;
+      g.strokeRect(x + 3, y + 3, w - 6, h - 6);
+      g.beginPath(); g.moveTo(x + 3, y + 3); g.lineTo(x + w - 3, y + h - 3); g.stroke();
+      g.fillStyle = 'rgba(255,255,255,0.14)'; g.fillRect(x + 2, y + 1, w - 4, 3);
+      g.fillStyle = '#2b2e22'; [[x + 2, y + 2], [x + w - 6, y + 2], [x + 2, y + h - 6], [x + w - 6, y + h - 6]].forEach(p => g.fillRect(p[0], p[1], 4, 4));
+    }
+    // back row (top), front row (bottom, wider: carries the HP number)
+    crate(16, 6, 28, 24, '#6e7a4a', '#4a5432');
+    crate(46, 6, 28, 24, '#66724a', '#434d2e');
+    crate(4, 28, 82, 40, '#7b8752', '#4d5734');
+    g.fillStyle = band; g.fillRect(4, 58, 82, 6);
+    g.fillStyle = 'rgba(0,0,0,0.35)'; g.fillRect(4, 64, 82, 4);
+    // stencil stripe
+    g.fillStyle = 'rgba(240,230,190,0.35)'; g.fillRect(10, 32, 16, 3); g.fillRect(64, 32, 16, 3);
+  };
+  drawers.girder = function (g) {
+    // riveted steel bridge truss upright with X bracing
+    g.fillStyle = 'rgba(0,0,0,0.25)'; ell(g, 32, 167, 26, 4); g.fill();
+    g.fillStyle = '#9a4a30'; g.fillRect(8, 4, 10, 164); g.fillRect(46, 4, 10, 164);
+    g.fillStyle = '#c0663f'; g.fillRect(10, 4, 3, 164); g.fillRect(48, 4, 3, 164);
+    g.strokeStyle = '#8a4129'; g.lineWidth = 5;
+    for (let y = 10; y < 160; y += 38) { g.beginPath(); g.moveTo(14, y); g.lineTo(50, y + 38); g.moveTo(50, y); g.lineTo(14, y + 38); g.stroke(); }
+    g.fillStyle = '#7a3a24'; g.fillRect(4, 0, 56, 8);
+    g.fillStyle = '#e0c9a0'; for (let y = 14; y < 164; y += 12) { circ(g, 13, y, 1.2); g.fill(); circ(g, 51, y, 1.2); g.fill(); }
   };
   drawers.cactus = function (g) {
     g.fillStyle = 'rgba(0,0,0,0.3)'; ell(g, 25, 93, 18, 4); g.fill();
@@ -462,6 +488,17 @@
       g.beginPath(); g.moveTo(28, 0); g.lineTo(32, 0); g.lineTo(16, H); g.lineTo(12, H); g.closePath(); g.fill();
     });
   };
+  // Cached front face of a tile (blue for positive, red for negative).
+  S.tileFace = function (neg) {
+    return getCanvas('tf|' + (neg ? 1 : 0), 64, 32, function (g, W, H) {
+      const gr = g.createLinearGradient(0, 0, 0, H);
+      if (neg) { gr.addColorStop(0, '#ff5a5a'); gr.addColorStop(1, '#a51818'); }
+      else { gr.addColorStop(0, '#4fa3ff'); gr.addColorStop(1, '#1747b0'); }
+      g.fillStyle = gr; g.fillRect(0, 0, W, H);
+      g.fillStyle = 'rgba(255,255,255,0.25)'; g.beginPath(); g.moveTo(6, 0); g.lineTo(16, 0); g.lineTo(8, H); g.lineTo(-2, H); g.closePath(); g.fill();
+      g.fillStyle = 'rgba(0,0,0,0.18)'; g.fillRect(0, H - 4, W, 4);
+    });
+  };
   S.gatePost = function (op) { return op === 'x' ? '#c98f00' : op === '+' ? '#1f58c9' : '#b81f1f'; };
   S.gateLabel = function (op, value) {
     if (op === 'x') return 'x' + (Number.isInteger(value) ? value : value.toFixed(1));
@@ -527,6 +564,14 @@
     if (theme === 'toxic' || theme === 'city') {
       g.fillStyle = theme === 'toxic' ? 'rgba(160,255,80,0.55)' : 'rgba(120,200,120,0.5)';
       [[100, 110], [215, 140], [385, 120]].forEach(p => { circ(g, p[0], H - 30 - p[1] - 10, 12); g.fill(); circ(g, p[0] + 10, H - 30 - p[1] - 24, 10); g.fill(); });
+    }
+    if (theme === 'bridge') { // suspension towers and cables over open water
+      g.fillStyle = T.skyline;
+      [[110, 170], [430, 170]].forEach(t => { g.fillRect(t[0] - 7, H - 30 - t[1], 6, t[1] + 30); g.fillRect(t[0] + 5, H - 30 - t[1], 6, t[1] + 30); g.fillRect(t[0] - 9, H - 30 - t[1] + 20, 22, 6); g.fillRect(t[0] - 9, H - 30 - t[1] + 80, 22, 6); });
+      g.strokeStyle = T.skyline; g.lineWidth = 2;
+      g.beginPath(); g.moveTo(-20, H - 40); g.quadraticCurveTo(110, H - 205, 110, H - 200); g.quadraticCurveTo(270, H - 40, 430, H - 200); g.quadraticCurveTo(470, H - 120, W + 20, H - 60); g.stroke();
+      g.fillStyle = '#4d7f9c'; g.fillRect(0, H - 34, W, 34);
+      g.fillStyle = 'rgba(255,255,255,0.35)'; for (let i = 0; i < 26; i++) g.fillRect(rnd() * W, H - 30 + rnd() * 26, 10 + rnd() * 18, 1.5);
     }
     // haze toward the road
     const hz = g.createLinearGradient(0, H - 50, 0, H); hz.addColorStop(0, 'rgba(' + T.haze + ',0)'); hz.addColorStop(1, 'rgba(' + T.haze + ',0.9)');

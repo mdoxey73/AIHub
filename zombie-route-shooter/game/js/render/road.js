@@ -1,6 +1,7 @@
-/* road.js — scrolling pseudo-3D highway: ground, asphalt, three lanes with
-   colored lane edges (supply / enemy / gate), barrier walls with hazard stripes
-   and LED posts, themed roadside props, far haze. setTheme() switches palette. */
+/* road.js — scrolling pseudo-3D highway: ground, asphalt, three lanes split
+   by low divider walls (green rail on the supply side, blue on the gate side),
+   barrier walls with hazard stripes and LED posts, themed roadside props, far
+   haze. setTheme() switches palette. */
 (function () {
   const C = ZRS.CONFIG, cam = ZRS.cam, S = ZRS.sprites;
   let K = Object.assign({}, C.COLORS, C.THEMES.city), themeName = 'city';
@@ -26,29 +27,59 @@
   const LN = C.LANES, ROLE = C.LANE_ROLE;
   const laneTint = { supply: 'rgba(80,220,110,0.10)', enemy: 'rgba(255,60,60,0.06)', gate: 'rgba(60,140,255,0.10)' };
 
+  // Low walls between the lanes, in segments with gaps, far to near.
+  const DIV_PERIOD = C.DIVIDER_ON + C.DIVIDER_OFF, DIV_H = 16, DIV_T = 0.016;
+  const RAIL = { L: '#3fd86a', R: '#3f8dff' };
+  function drawDividers(g, squadZ) {
+    const k0 = Math.floor((squadZ + DZ_NEAR) / DIV_PERIOD), k1 = Math.floor((squadZ + 150) / DIV_PERIOD);
+    const xs = [LN.L.max, LN.M.max], rails = [RAIL.L, RAIL.R];
+    for (let k = k1; k >= k0; k--) {
+      let dz0 = k * DIV_PERIOD - squadZ, dz1 = dz0 + C.DIVIDER_ON;
+      if (dz1 < DZ_NEAR) continue;
+      if (dz0 < DZ_NEAR) dz0 = DZ_NEAR;
+      for (let j = 0; j < 2; j++) {
+        const x = xs[j];
+        // shadow, inner face toward the road center, top cap, colored rail
+        g.fillStyle = 'rgba(0,0,0,0.22)'; quad(g, dz0, x - DIV_T * 3, x + DIV_T * 3, dz1, x - DIV_T * 3, x + DIV_T * 3);
+        const face = x < 0 ? x + DIV_T : x - DIV_T;
+        cam.project(dz0, face, pa); cam.project(dz1, face, pc);
+        g.fillStyle = K.barrierDark;
+        g.beginPath(); g.moveTo(pa.x, pa.y); g.lineTo(pc.x, pc.y); g.lineTo(pc.x, pc.y - DIV_H * pc.s); g.lineTo(pa.x, pa.y - DIV_H * pa.s); g.closePath(); g.fill();
+        g.fillStyle = K.barrier; quad(g, dz0, x - DIV_T, x + DIV_T, dz1, x - DIV_T, x + DIV_T, DIV_H, DIV_H);
+        g.fillStyle = rails[j]; quad(g, dz0, x - DIV_T, x + DIV_T, dz1, x - DIV_T, x + DIV_T, DIV_H + 5, DIV_H + 5);
+        // end caps and posts every 5.5 m
+        for (let q = 0; q <= 4; q++) {
+          const dz = dz0 + (dz1 - dz0) * q / 4; if (dz < DZ_NEAR + 0.5) continue;
+          cam.project(dz, x, pa);
+          g.fillStyle = '#2b2e36'; g.fillRect(pa.x - 1.6 * pa.s, pa.y - (DIV_H + 9) * pa.s, 3.2 * pa.s, (DIV_H + 9) * pa.s);
+          g.fillStyle = rails[j]; g.fillRect(pa.x - 2.2 * pa.s, pa.y - (DIV_H + 11) * pa.s, 4.4 * pa.s, 3 * pa.s);
+        }
+      }
+    }
+  }
+
   R.draw = function (g, squadZ) {
     const W = cam.W, H = cam.H, far = C.FAR;
     g.drawImage(S.backdrop(), 0, 0);
     // ground
     g.fillStyle = K.ground; g.fillRect(0, cam.horizonY, W, H - cam.horizonY);
+    if (K.water) { // open water below the bridge deck: drifting ripples
+      g.fillStyle = 'rgba(255,255,255,0.18)';
+      const r0 = Math.floor(squadZ / 3);
+      for (let k = r0; k < r0 + 40; k++) {
+        const h = ((k * 2654435761) >>> 0) % 1000, dz = k * 3 - squadZ; if (dz < 0.5) continue;
+        for (let sd = -1; sd <= 1; sd += 2) { cam.project(dz, sd * (1.25 + (h % 90) / 100), pa); g.fillRect(pa.x - 14 * pa.s, pa.y, 28 * pa.s, Math.max(1, 2 * pa.s)); }
+      }
+    }
     // asphalt (slightly lighter far away)
     const asph = g.createLinearGradient(0, cam.horizonY, 0, H);
     asph.addColorStop(0, K.asphaltFar); asph.addColorStop(0.35, K.asphalt); asph.addColorStop(1, K.asphaltNear);
     g.fillStyle = asph; quad(g, DZ_NEAR, -1.1, 1.1, far, -1.1, 1.1);
     // lane tints: each lane has one job, so color it faintly by role
     for (const role in ROLE) { const ln = LN[ROLE[role]]; g.fillStyle = laneTint[role]; quad(g, DZ_NEAR, ln.min, ln.max, far, ln.min, ln.max); }
-    // solid edge lines and dashed lane dividers (period 6 m, dash 3 m)
+    // solid edge lines
     g.fillStyle = K.lane;
     quad(g, DZ_NEAR, -0.985, -0.97, far, -0.985, -0.97); quad(g, DZ_NEAR, 0.97, 0.985, far, 0.97, 0.985);
-    const k0 = Math.floor((squadZ + DZ_NEAR) / 6), k1 = Math.floor((squadZ + far) / 6);
-    const ld1 = LN.L.max, ld2 = LN.M.max;
-    for (let k = k0; k <= k1; k++) {
-      let dz0 = k * 6 - squadZ, dz1 = dz0 + 3;
-      if (dz1 < DZ_NEAR) continue;
-      if (dz0 < DZ_NEAR) dz0 = DZ_NEAR;
-      quad(g, dz0, ld1 - 0.012, ld1 + 0.012, dz1, ld1 - 0.012, ld1 + 0.012);
-      quad(g, dz0, ld2 - 0.012, ld2 + 0.012, dz1, ld2 - 0.012, ld2 + 0.012);
-    }
     // lane role markings painted on the asphalt every 48 m: a plus in the supply lane, a chevron in the gate lane
     const m0 = Math.floor((squadZ + 4) / 48), m1 = Math.floor((squadZ + 100) / 48);
     for (let m = m0; m <= m1; m++) {
@@ -73,6 +104,7 @@
       else { g.fillStyle = '#6b6050'; g.fillRect(pa.x - 3 * pa.s, pa.y - 3 * pa.s, 6 * pa.s, 3 * pa.s); g.fillStyle = '#8a8070'; g.fillRect(pa.x + 4 * pa.s, pa.y - 2 * pa.s, 4 * pa.s, 2 * pa.s); }
     }
     ZRS.fx.drawDecals(g, squadZ);
+    drawDividers(g, squadZ);
     // barrier walls
     for (let side = -1; side <= 1; side += 2) {
       const xi = side * 1.0, xo = side * 1.09;

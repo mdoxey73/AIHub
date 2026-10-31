@@ -4,7 +4,7 @@ const path = require('path');
 const GAME = 'file://' + path.resolve(__dirname, '..', 'index.html');
 const level = parseInt(process.argv[2] || '1', 10);
 (async () => {
-  const browser = await chromium.launch();
+  const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || undefined });
   const ctx = await browser.newContext({ viewport: { width: 540, height: 960 } });
   const page = await ctx.newPage();
   const errors = [];
@@ -16,17 +16,27 @@ const level = parseInt(process.argv[2] || '1', 10);
   let result = null, peakN = 0, maxZb = 0, bossSeen = null, bossT0 = 0, bossTtk = null, minN = 1e9, nAtBoss = null, weapons = new Set();
   for (let i = 0; i < 1500; i++) {
     const r = await page.evaluate(() => {
-      const Q = ZRS.squad, G = ZRS.gates.items, Ba = ZRS.barrels.items;
-      let best = null;
-      for (const gt of G) { if (!gt.a || gt.passed) continue; if (!best || gt.z < best.z) best = gt; }
-      let target = Q.targetX;
-      if (best) {
-        const same = G.filter(g => g.a && !g.passed && Math.abs(g.z - best.z) < 0.5);
-        const score = g => (g.op === 'x' ? Q.n * (g.value - 1) : g.op === '+' ? g.value : g.op === '-' ? -g.value : -Q.n / 2);
-        same.sort((a, b) => score(b) - score(a));
-        target = same[0].lane === 'L' ? -0.5 : same[0].lane === 'R' ? 0.5 : 0;
+      // Lane-aware steering: shoot a supply stand when it can be broken in time,
+      // otherwise ride the gate lane, stepping out of it around negative gates.
+      const Q = ZRS.squad, G = ZRS.gates.items, Ba = ZRS.barrels.items, C = ZRS.CONFIG, X = C.LANE_X, ROLE = C.LANE_ROLE;
+      const w = C.WEAPONS[Q.weapon];
+      const dps = Math.max(1, Q.soldiers.length) * w.rate * Q.rateMult * w.dmg * Q.dmgMult() * (w.pellets || 1) * 0.7;
+      let target = X[ROLE.gate];
+      let stand = null;
+      for (const b of Ba) {
+        if (!b.a || b.broken || b.kind === 'explosive') continue;
+        const dz = b.z - Q.z; if (dz < 1.5 || dz > 45) continue;
+        if (b.hp <= dps * Math.max(0, (dz - 4) / (C.SQUAD_SPEED + 0.01))) { if (!stand || b.z < stand.z) stand = b; }
       }
-      for (const b of Ba) { if (b.a && !b.broken && b.kind !== 'explosive' && b.z - Q.z < 30 && b.z - Q.z > 2 && (!best || b.z < best.z + 10)) target = b.x; }
+      if (stand) target = X[ROLE.supply];
+      // dodge a negative big gate (or a red tile run) ahead in the gate lane
+      if (target === X[ROLE.gate]) {
+        for (const gt of G) {
+          if (!gt.a || gt.passed) continue;
+          const dz = gt.z - Q.z;
+          if (dz > -0.5 && dz < 5 && (gt.op === '-' || gt.op === '/')) { target = X[ROLE.enemy] + 0.05; break; }
+        }
+      }
       Q.targetX = target;
       return { state: ZRS.game.state, n: Q.n, z: Q.z, w: Q.weapon, rate: Q.rateMult, dmg: Q.dmgBonus, boss: ZRS.boss.active ? ZRS.boss.hp : -1, bossDead: ZRS.boss.dead, zb: ZRS.zombies.aliveCount(), fps: ZRS.game.fps };
     });

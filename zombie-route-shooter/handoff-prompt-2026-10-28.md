@@ -1,6 +1,7 @@
 ---
 title: Handoff Prompt — Zombie Route Shooter
 date: 2026-10-28
+updated: 2026-10-31
 status: current
 tags:
   - game-dev
@@ -17,7 +18,7 @@ related:
 
 ---
 
-You are continuing work on **Zombie Route Shooter**, a self-contained HTML5 / Canvas 2D mobile web game that plays the way the *Z Route: Redemption* ads pretend that app plays: a squad lane-runner with numbered gates, numbered barrels, zombies with HP numbers, and a giant boss at the end of every road. It is Dr. Doxey's side project; the real app is a base-builder and this game is deliberately the honest version of the ad.
+You are continuing work on **Zombie Route Shooter**, a self-contained HTML5 / Canvas 2D mobile web game that plays the way the mobile zombie-runner ads pretend those apps play: a three-lane squad runner with a supply lane, an enemy lane and a gate lane, swarms of weak zombies, and a giant boss at the end of every road. It is Dr. Doxey's side project; the real app is a base-builder and this game is deliberately the honest version of the ad.
 
 ## Where things are
 
@@ -28,23 +29,29 @@ You are continuing work on **Zombie Route Shooter**, a self-contained HTML5 / Ca
 
 ## How the game works now
 
-- Squad auto-runs up a two-lane highway and auto-fires straight ahead. Drag left/right steers. Count `N` is the resource, capped at 9999. 64 soldiers are drawn; damage per bullet carries the whole squad: `effective = min(N,64) + (N-64)^0.75`, spread over the drawn soldiers (`squad.dmgMult`).
-- Gates `+k xk -k ÷k`, one lane wide, 12 m apart in chains (never stacked). **Gates absorb bullets** (classic ad behavior) and are pumped by hits: 12 hits for the first upgrade, +10 per further upgrade, uncapped except `+60` / `x4`. So pumping a gate costs the fire that would hit zombies.
-- Layout rule (enforced by `fixLayout` in `levels.js` and checked statically): no pack or horde sits 22–46 m behind a gate in its lane (it would still be behind the gate when the squad arrives). Barrels are exempt (they do not move). The runtime trickle spawner (`trickleLane` in `main.js`) obeys the same rule.
-- Barrels show HP as a number and must be shot to zero: weapon barrels (pistol, rifle, shotgun, minigun, rpg, drone, vehicle), bonus barrels (`+N` squad, `RATE+` +20% fire rate to 2x, `DMG+` +20% damage to 2x), explosive barrels (area blast, chain, cost 4 soldiers if run into). Barrel HP scales with level (x3 in generated levels). Every level ends with a "boss choice": a high-HP barrel in one lane and a pumpable gate in the other, met while the boss walks in.
-- Zombies: walker, runner (from level 3), brute (from level 5). Packs, hordes up to 64 in rows of 10 across both lanes (late hordes mix runners and brutes), and a trickle stream. Contact kills scale by level (x2 from 5, x3 from 9). Zombies home toward the squad over the last 22 m.
-- Boss every level, Giant on 5 and 10 with escort hordes; drains `max(10, 15% of N)` soldiers per second on contact; RPG hits set it burning.
-- Levels: 1–3 hand-laid in `levels.js`; 4–12 from hand-tuned parameter rows through a seeded generator; 13+ scaled from row 12.
+- Three lanes, each with one job, separated by low walls (green rail on the left divider, blue on the right). **Left = supply**: static crate-stack stands with a big HP number and the reward on top (weapons, `+N` squad, `RATE+`, `DMG+`); they do not move or roll and must be shot to zero. **Middle = enemies**: dense packs and hordes of small, weak zombies (crawler 3 HP, walker 5, runner 4, brute 60), plus explosive barrels and a trickle stream; a pack of 10 or more shows one shared red count chip instead of per-zombie numbers. **Right = gates**: long runs of consecutive `+1` (later `+2`) tiles at 1.7 m spacing that apply as you pass them, each run capped by a big pumpable gate (`+k`, sometimes `x2`, `x3` only late), with red `-` tiles or a `÷`/`-` gate in the breaks.
+- Squad auto-runs and auto-fires; drag steers across all three lanes. `N` capped at 9999; damage per bullet carries `min(N,64) + (N-64)^0.75` effective shooters. Bullets **pierce**: a kill passes the leftover damage on, up to 6 zombies per bullet (`BULLET_PIERCE`); RPG rockets plow through small zombies and explode on a brute, boss, stand or when spent. Big gates still absorb bullets and are pumped by hits; tiles do not absorb.
+- Zombies home toward the squad inside 13 m. Contact kills 1x, 2x from level 9 (brutes 4).
+- Six themes cycle by level (city, desert, Rust River Bridge with water and girders, night, snow, toxic) and each level has a modifier (swarm, rush, siege, gauntlet, supply, flood). Level 7 is FLOOD: one giant horde past the halfway mark.
+- Boss every level, Giant on 5 and 10 with full-width escort hordes; the trickle stops once the boss spawns.
+- All levels come from per-level parameter rows through one seeded generator in `levels.js` that fills each lane as its own stream; 13+ scale from row 12.
 
 ## Verification method (use it before every push)
 
-From `game/test/`: `node ai.js <level>` runs a steering AI (best gate lane, nearby barrels) and prints win/lose, peak N, boss kill time, max zombies. `node dumb.js` runs no-steering levels 1, 3, 6 (should lose). `node run.js` covers the full flow, lose path, stress scene and frame timing. `node phone.js`, `node pwa.js`, `node single.js` cover touch, offline install and the single-file build. Static layout check (no stacked gates, nothing in a gate shadow):
+Headless Chrome: Playwright's own browser download is blocked in the cloud container. Fetch Chrome for Testing into a scratch folder (not a repo dependency) and point the tests at it:
 
 ```
-cd game && node -e "global.window=global;require('./js/config.js');require('./js/levels.js');const L=ZRS.levels;let bad=0;for(let n=1;n<=15;n++){const lv=L.get(n),g=L.gateList(lv.segs);lv.segs.forEach(s=>{if(s[0]==='pack'&&L.shadowed(g,s[1],s[2]))bad++;if(s[0]==='horde'&&L.shadowed(g,s[1],'B'))bad++;});}console.log('violations',bad)"
+npx @puppeteer/browsers install chrome-headless-shell@131.0.6778.204 --base-url https://storage.googleapis.com/chrome-for-testing-public
+export CHROME_PATH=<path printed above> NODE_PATH=/opt/node-tools/node_modules
 ```
 
-State at handoff: steering AI wins all twelve levels (level 1 boss in about 11 s, level 10 Giant in about 20 s, 48 to 201 zombies on screen); no-steering runs lose levels 3 and 6 and win the tutorial level 1; static layout check reports 0 gate-shadow violations and 0 stacked gates across levels 1 to 15; single-file build and offline install verified.
+From `game/test/`: `node ai.js <level>` runs a lane-aware steering AI (supply lane when a stand can be broken in time, gate lane otherwise, dodges negative gates into the enemy lane) and prints win/lose, N at boss, boss kill time, max zombies. Each run takes 90 to 140 s in real time; run four in parallel. `node dumb.js` runs no-steering levels 1, 3, 6 (should lose). `node run.js`, `phone.js`, `pwa.js`, `single.js` cover full flow, touch, offline install and the single-file build. Static check for stacked gates:
+
+```
+cd game && node -e "global.window=global;require('./js/config.js');require('./js/levels.js');const L=ZRS.levels;let bad=0;for(let n=1;n<=14;n++)bad+=L.stackedGates(L.get(n));console.log('stacked',bad)"
+```
+
+State at handoff (2026-10-31): lane-aware AI wins all twelve levels (level 1 boss in about 13 s, Giants on 5 and 10 in about 17 s, 129 to 530 zombies on screen at peak); no-steering runs lose levels 1, 3 and 6; 0 stacked gates across levels 1 to 14; `run.js`, `phone.js`, `pwa.js` and `single.js` pass with no errors; stress scene holds 60 fps headless.
 
 ## Conventions that matter
 
@@ -55,24 +62,8 @@ State at handoff: steering AI wins all twelve levels (level 1 boss in about 11 s
 
 ## Open work, in priority order
 
-1. Difficulty tuning by a human. The steering AI is crude (it ignores barrels unless they are close and does not weigh absorbing gates), so its results are a floor, not the truth. Dr. Doxey's feedback drove the last pass: gates were capped and stacked, barrels lacked variety, too few enemies, and zombies hid behind gates. All four are addressed; the feel still needs a hands-on pass.
-2. Real-device profiling (never done): check 150+ zombies and 400+ bullets on a mid-range phone; caches and pooling are in place.
-3. Visual polish beyond the current pass (outlined sprites, blood decals, debris, sun/clouds, gate glow, vignette): richer boss, muzzle smoke, a desert backdrop skin like the App Store creative, better roadside props.
-4. Boss damage pops aggregate over 120 ms and read "-3000"; the ads show "-80". Optional cosmetic cap.
+1. Hands-on difficulty pass by Dr. Doxey on the three-lane build (2026-10-31). The AI results are a floor, not the truth.
+2. Real-device profiling (never done): the swarms put 130 to 520 zombies on screen; check frame rate on a mid-range phone and lower `MAX_ZOMBIES` or pack sizes if it drops.
+3. More art: richer boss, muzzle smoke, more stand and prop variety per theme.
+4. Boss damage pops aggregate over 120 ms; optional cosmetic cap.
 5. GitHub Pages for the installable version is pending Dr. Doxey's decision to merge into `main`.
-
-## Work in progress, 2026-10-31 (three-lane rework, not tuned, not published)
-
-Dr. Doxey asked for: bonuses, enemies and gates each in their own lane (per reference videos "Screen_Recording_20261031_0812xx_YouTube.mp4" to "..._081648_YouTube.mp4" in the mdoxey73 Google Drive, not yet viewed); more enemies with less health; static bonuses in the left lane; more level variety; better art.
-
-Committed so far (runs without errors, balance NOT tuned; the old steering AI is not lane-aware and loses level 1 at about 38 m):
-- `config.js`: three lanes (`LANES`, `LANE_X`, `LANE_ROLE`: supply L, enemy M, gate R); zombie HP cut to about a third (walker 9, runner 6, brute 70) plus a new `crawler` (hp 4); `MAX_ZOMBIES` 640; five `THEMES` (city, desert, night, snow, toxic). `GATE_SHADOW` removed.
-- `levels.js`: rewritten. All levels come from parameter rows through one generator that fills each lane as its own stream (gate runs with negatives in the breaks, packs/hordes/explosives in the enemy lane, stands in the supply lane). Each level has a theme (cycles by level) and a modifier (swarm, rush, siege, gauntlet, supply). New segment forms are documented at the top of the file. `L.stackedGates(lv)` replaces the old shadow check.
-- `zombies.js`: lane-based packs (rows of 4) and hordes (rows of 5, or `'ALL'` for boss escorts), mix fractions incl. crawler, a per-step depth index for bullet hit tests, three skins per type, white hit flash.
-- `gates.js`: gates span the gate lane; new drawing (gradient panel, chevron beam, pump progress bar).
-- `barrels.js`: supply stands are static plinths (no bob) with the reward mounted on top; explosives spawn at an x inside the enemy lane.
-- `main.js`: spawns by lane role; trickle is enemy-lane only; boss escorts span the road; level intro banner (theme title + modifier); contact multiplier now 1x, 2x from level 9.
-- `road.js` / `sprites.js`: three lanes with role tints and markings, themed palettes, backdrops and props (cactus, pine, lamp, rock), crawler and stand sprites, shaded soldier helmet, brute armor.
-- `squad.js`: squad starts in the middle lane.
-
-Next: view the videos and confirm lane order and enemy density; make `test/ai.js` lane-aware (use `CONFIG.LANE_X` / `LANE_ROLE`); tune levels 1-12; bump `sw.js` VERSION; rebuild single file; republish the artifact. Playwright browsers cannot be downloaded in the current cloud environment (PLAYWRIGHT_DOWNLOAD_HOST is blocked); a Node harness using @napi-rs/canvas in a scratch folder (not a repo dependency) ran levels headlessly and rendered screenshots.
